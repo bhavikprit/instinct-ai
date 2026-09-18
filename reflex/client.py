@@ -67,6 +67,9 @@ class Reflex:
 
         if isinstance(backend, BaseBackend):
             self.backend = backend
+        elif backend in ("native", "c"):
+            from reflex.backends.c_engine import NativeCEngine
+            self.backend = NativeCEngine(**backend_kwargs)
         elif backend == "local":
             self.backend = LocalEngine()
         elif backend in ("semantic", "embeddings"):

@@ -24,6 +24,7 @@ from reflex.cache import InstinctCache
 from reflex.telemetry import OpenTelemetryTracer
 from reflex.feedback import FeedbackCollector
 from reflex.learning import SelfTuningInstinctHead, OnlineTuner
+from reflex.backends.c_engine import NativeCEngine
 from reflex.proxy import start_proxy
 
 __version__ = "0.2.0"
@@ -41,6 +42,7 @@ __all__ = [
     "FeedbackCollector",
     "SelfTuningInstinctHead",
     "OnlineTuner",
+    "NativeCEngine",
     "list_models",
     "download_model",
     "MODEL_CATALOG",
