@@ -107,7 +107,11 @@ class LocalEngine(BaseBackend):
             "billing": {"refund", "invoice", "charge", "card", "payment", "receipt", "overcharged", "money", "paid", "billed"},
             "sales": {"pricing", "enterprise", "quote", "demo", "buy", "upgrade", "deal", "lead"},
             "support": {"help", "broken", "bug", "issue", "crash", "error", "assist", "problem"},
-            "urgent": {"emergency", "asap", "critical", "immediately", "urgent", "danger"}
+            "urgent": {"emergency", "asap", "critical", "immediately", "urgent", "danger"},
+            "weather": {"rain", "raining", "snow", "temperature", "forecast", "sunny", "climate", "storm", "weather"},
+            "code": {"git", "commit", "push", "deploy", "docker", "kubernetes", "branch", "repo", "merge"},
+            "math": {"calc", "calculate", "math", "multiplied", "multiply", "divide", "add", "square", "root"},
+            "search": {"web", "internet", "google", "online", "lookup", "query", "find", "news"},
         }
 
         scores: Dict[str, float] = {}

@@ -42,6 +42,11 @@ def main():
     play_parser.add_argument("--port", type=int, default=8000, help="Port (default: 8000)")
     play_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open web browser")
 
+    # Command: quantize (INT8 ONNX model quantization)
+    q_parser = subparsers.add_parser("quantize", help="Quantize an ONNX model to INT8")
+    q_parser.add_argument("model_path", help="Path to input .onnx model file")
+    q_parser.add_argument("--output", default=None, help="Path for quantized output .onnx file")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -57,6 +62,10 @@ def main():
         except KeyboardInterrupt:
             print("\nShutting down Reflex Playground...")
             sys.exit(0)
+    elif args.command == "quantize":
+        from reflex.export import quantize_onnx_model
+        out = quantize_onnx_model(args.model_path, args.output)
+        print(f"✅ Quantized model ready at: {out}")
     elif args.command == "mcp":
         from reflex.mcp import start_mcp_server
         try:

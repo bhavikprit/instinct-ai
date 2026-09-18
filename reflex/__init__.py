@@ -12,6 +12,7 @@ from reflex.guardrails import (
     PIIGuardrail,
     GuardrailSuite,
 )
+from reflex.tool_router import FastToolRouter, ToolDefinition
 from reflex.proxy import start_proxy
 
 __version__ = "0.1.0"
@@ -27,5 +28,7 @@ __all__ = [
     "PromptInjectionGuardrail",
     "PIIGuardrail",
     "GuardrailSuite",
+    "FastToolRouter",
+    "ToolDefinition",
     "start_proxy",
 ]
