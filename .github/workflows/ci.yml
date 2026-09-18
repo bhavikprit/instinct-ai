@@ -40,7 +40,7 @@ jobs:
 
     - name: Run System Diagnostics (reflex doctor)
       run: |
-        reflex doctor
+        python -m reflex.cli doctor
 
     - name: Run Python Unit Tests & Cross-Language Parity
       run: |

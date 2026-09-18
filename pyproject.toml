@@ -29,5 +29,10 @@ all = ["fastapi>=0.100.0", "uvicorn>=0.20.0", "httpx>=0.24.0", "onnxruntime>=1.1
 [project.scripts]
 reflex = "reflex.cli:main"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["reflex*"]
+exclude = ["packages*", "reflex_c*", "tests*", "benchmarks*", "examples*"]
+
 [tool.setuptools.package-data]
 "reflex.web" = ["*.html"]
