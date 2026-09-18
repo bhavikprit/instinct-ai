@@ -56,6 +56,13 @@ def main():
     bench_parser = subparsers.add_parser("benchmark", help="Run DecisionBench evaluation across backends")
     bench_parser.add_argument("--output", default=None, help="Path to export Markdown leaderboard")
 
+    # Command: models (Open-weights catalog and cache manager)
+    models_parser = subparsers.add_parser("models", help="Inspect and download open-weight checkpoints")
+    models_sub = models_parser.add_subparsers(dest="models_action", help="Action: list or download")
+    models_sub.add_parser("list", help="List available and cached models")
+    dl_parser = models_sub.add_parser("download", help="Download a model checkpoint from the catalog")
+    dl_parser.add_argument("model_name", help="Name of model to download (e.g., reflex-0.5b-int8)")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -67,6 +74,20 @@ def main():
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))
+    elif args.command == "models":
+        from reflex.models import list_models, download_model
+        if args.models_action == "download":
+            path = download_model(args.model_name)
+            print(f"✅ Ready: {path}")
+        else:
+            models = list_models()
+            print("\n📦 Reflex Open-Weights Model Catalog:")
+            print(f"{'Model Name':<26} {'Size':<10} {'Cached':<8} {'Description'}")
+            print("-" * 75)
+            for m in models:
+                cached_str = "✅ Yes" if m["cached"] else "❌ No"
+                print(f"{m['name']:<26} {m['size_mb']:.1f} MB   {cached_str:<8} {m['description']}")
+            print("\nDownload any model via: reflex models download <name>\n")
     elif args.command == "serve-api":
         from reflex.server import start_server
         try:

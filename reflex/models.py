@@ -7,12 +7,19 @@ from __future__ import annotations
 import os
 import urllib.request
 import urllib.error
-from typing import Dict, Optional, Any
+from typing import Dict, List, Optional, Any
 
 DEFAULT_CACHE_DIR = os.path.expanduser("~/.cache/reflex/models")
 
 # Curated catalog of lightweight open-weights decision models
 MODEL_CATALOG: Dict[str, Dict[str, Any]] = {
+    "reflex-0.5b-int8": {
+        "description": "Reflex-0.5B canonical INT8 decision checkpoint (~118MB)",
+        "repo": "reflex-ai/reflex-0.5b-int8",
+        "filename": "model_quantized.onnx",
+        "url": "https://huggingface.co/reflex-ai/reflex-0.5b-int8/resolve/main/model_quantized.onnx",
+        "size_mb": 118.4,
+    },
     "reflex-modernbert-int8": {
         "description": "ModernBERT quantized INT8 decision model (~45MB)",
         "repo": "reflex-ai/reflex-modernbert-int8",
@@ -28,6 +35,25 @@ MODEL_CATALOG: Dict[str, Dict[str, Any]] = {
         "size_mb": 22.8,
     },
 }
+
+
+def list_models(cache_dir: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Lists all models in the curated catalog alongside local cache status.
+    """
+    models = []
+    for model_name, info in MODEL_CATALOG.items():
+        cached = is_model_cached(model_name, cache_dir)
+        local_path = get_model_path(model_name, cache_dir)
+        models.append({
+            "name": model_name,
+            "description": info["description"],
+            "size_mb": info["size_mb"],
+            "cached": cached,
+            "path": local_path if cached else None,
+            "url": info["url"],
+        })
+    return models
 
 
 def get_model_path(model_name: str, cache_dir: Optional[str] = None) -> str:
@@ -89,7 +115,7 @@ def download_model(
     try:
         req = urllib.request.Request(
             url,
-            headers={"User-Agent": "reflex-ai/0.1.0"},
+            headers={"User-Agent": "reflex-ai/0.2.0"},
         )
         with urllib.request.urlopen(req) as resp, open(temp_path, "wb") as out_file:
             chunk_size = 64 * 1024

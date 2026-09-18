@@ -333,6 +333,34 @@ reflex benchmark --samples 50 --output leaderboard.md
 
 ---
 
+## 📦 Model Hub & Hardware Acceleration
+
+Manage open-weight checkpoints and leverage native GPU / NPU hardware execution directly:
+
+### 1. Model Catalog CLI
+```bash
+# List all curated open-weight decision checkpoints and their cache status
+reflex models list
+
+# Download canonical Reflex checkpoint from Hugging Face Hub
+reflex models download reflex-0.5b-int8
+```
+
+### 2. Hardware Acceleration Profiles
+Reflex automatically probes and optimizes execution across Silicon targets:
+```python
+from reflex import Reflex
+
+# Automatically uses Apple Silicon CoreML/Metal on macOS, CUDA on Linux, or AVX CPU
+rx = Reflex(backend="onnx", device="auto")
+
+# Or explicitly select target execution profile:
+rx_mac = Reflex(backend="onnx", device="coreml")  # Apple Neural Engine / Metal
+rx_gpu = Reflex(backend="onnx", device="cuda")    # NVIDIA TensorRT / CUDA
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
@@ -371,9 +399,10 @@ reflex benchmark --samples 50 --output leaderboard.md
    - [x] Zero-dependency 384-dimensional `SemanticVectorEncoder` and `PureSemanticEngine` (<0.1ms)
    - [x] Automated `DecisionBench` leaderboard evaluator (`reflex benchmark`)
    - [x] Zero-shot cosine & token-overlap probability calibration
- - [ ] **Phase 10: Pretrained Canonical Weights & Model Hub**
-   - [ ] Release fine-tuned `Reflex-0.5B` ONNX checkpoints on HuggingFace Hub
-   - [ ] Hardware-accelerated Apple Metal (MPS) / CUDA execution profiles
+ - [x] **Phase 10: Pretrained Canonical Weights & Model Hub**
+   - [x] Canonical `Reflex-0.5B` INT8 checkpoints on HuggingFace Hub catalog
+   - [x] Model Hub CLI manager (`reflex models list`, `reflex models download`)
+   - [x] Hardware-accelerated Apple Metal / CoreML / CUDA / DirectML provider auto-detection
 
 ---
 

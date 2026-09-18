@@ -31,19 +31,69 @@ class ONNXEngine(BaseBackend):
 
     DEFAULT_CACHE_DIR = os.path.expanduser("~/.cache/reflex/models")
 
+    @classmethod
+    def resolve_providers(
+        cls,
+        device: str = "auto",
+        explicit_providers: Optional[List[str]] = None,
+    ) -> List[str]:
+        """
+        Resolves hardware-accelerated execution providers.
+        Supported devices:
+        - "auto": Auto-detects Apple Metal / CoreML, CUDA, or DirectML; falls back to CPU
+        - "cuda": NVIDIA CUDA / TensorRT execution
+        - "coreml" | "metal" | "mps": Apple Silicon CoreML / Neural Engine / Metal
+        - "dml": Windows DirectX 12 / DirectML
+        - "cpu": Standard CPU execution with AVX/NEON vector extensions
+        """
+        if explicit_providers:
+            return explicit_providers
+
+        dev = (device or "auto").lower().strip()
+        if dev == "cpu":
+            return ["CPUExecutionProvider"]
+
+        try:
+            import onnxruntime as ort
+            available = ort.get_available_providers()
+        except Exception:
+            available = ["CPUExecutionProvider"]
+
+        if dev in ("cuda", "gpu"):
+            selected = [p for p in ["CUDAExecutionProvider", "TensorrtExecutionProvider"] if p in available]
+            selected.append("CPUExecutionProvider")
+            return selected
+        elif dev in ("coreml", "metal", "mps"):
+            selected = [p for p in ["CoreMLExecutionProvider"] if p in available]
+            selected.append("CPUExecutionProvider")
+            return selected
+        elif dev == "dml":
+            selected = [p for p in ["DmlExecutionProvider"] if p in available]
+            selected.append("CPUExecutionProvider")
+            return selected
+        elif dev == "auto":
+            candidates = ["CUDAExecutionProvider", "CoreMLExecutionProvider", "DmlExecutionProvider"]
+            selected = [p for p in candidates if p in available]
+            selected.append("CPUExecutionProvider")
+            return selected
+
+        return ["CPUExecutionProvider"]
+
     def __init__(
         self,
         model_path: Optional[str] = None,
         temperature: float = 1.0,
         cache_dir: Optional[str] = None,
         providers: Optional[List[str]] = None,
+        device: str = "auto",
         mock_mode: bool = False,
     ):
         self.name = "onnx-local"
         self.model_path = model_path
         self.temperature = max(0.01, temperature)
         self.cache_dir = cache_dir or self.DEFAULT_CACHE_DIR
-        self.providers = providers or ["CPUExecutionProvider"]
+        self.device = device
+        self.providers = self.resolve_providers(device=device, explicit_providers=providers)
         self.mock_mode = mock_mode
         self._session = None
         self._tokenizer = None
