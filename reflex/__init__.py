@@ -15,6 +15,11 @@ from reflex.guardrails import (
     GuardrailSuite,
 )
 from reflex.tool_router import FastToolRouter, ToolDefinition
+from reflex.streaming import (
+    TokenStreamInterceptor,
+    StreamBlockedError,
+    StreamingDecisionGate,
+)
 from reflex.proxy import start_proxy
 
 __version__ = "0.2.0"
@@ -37,5 +42,8 @@ __all__ = [
     "GuardrailSuite",
     "FastToolRouter",
     "ToolDefinition",
+    "TokenStreamInterceptor",
+    "StreamBlockedError",
+    "StreamingDecisionGate",
     "start_proxy",
 ]

@@ -63,9 +63,16 @@ def main():
     dl_parser = models_sub.add_parser("download", help="Download a model checkpoint from the catalog")
     dl_parser.add_argument("model_name", help="Name of model to download (e.g., reflex-0.5b-int8)")
 
+    # Command: repl (Interactive terminal shell)
+    repl_parser = subparsers.add_parser("repl", help="Start interactive System 1 decision terminal shell")
+    repl_parser.add_argument("--backend", default="semantic", help="Initial backend (default: semantic)")
+
     args = parser.parse_args()
 
-    if args.command == "serve":
+    if args.command == "repl":
+        from reflex.repl import start_repl
+        start_repl(initial_backend=args.backend)
+    elif args.command == "serve":
         try:
             start_proxy(host=args.host, port=args.port)
         except KeyboardInterrupt:
