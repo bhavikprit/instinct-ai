@@ -36,6 +36,12 @@ def main():
     ds_parser.add_argument("--output", default="decision_dataset.jsonl", help="Output JSONL path")
     ds_parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
 
+    # Command: playground (Interactive dual-brain browser UI)
+    play_parser = subparsers.add_parser("playground", help="Launch interactive Dual-Brain Web Playground")
+    play_parser.add_argument("--host", default="127.0.0.1", help="Host address (default: 127.0.0.1)")
+    play_parser.add_argument("--port", type=int, default=8000, help="Port (default: 8000)")
+    play_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open web browser")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -43,6 +49,13 @@ def main():
             start_proxy(host=args.host, port=args.port)
         except KeyboardInterrupt:
             print("\nShutting down Reflex Proxy...")
+            sys.exit(0)
+    elif args.command == "playground":
+        from reflex.web.playground import start_playground
+        try:
+            start_playground(host=args.host, port=args.port, open_browser=not args.no_browser)
+        except KeyboardInterrupt:
+            print("\nShutting down Reflex Playground...")
             sys.exit(0)
     elif args.command == "mcp":
         from reflex.mcp import start_mcp_server

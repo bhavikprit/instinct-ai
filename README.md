@@ -85,6 +85,20 @@ target_tool = rx.choice("Select next agent tool", ["search", "calc", "sql"], age
 
 ---
 
+## 🖥️ Interactive Dual-Brain Web Playground
+
+Launch the real-time visual telemetry playground in your browser:
+
+```bash
+reflex playground --port 8000
+```
+
+- **Side-by-side comparative dashboard**: Visualizes System 1 (<15ms, $0) vs System 2 (2,000ms, $0.03).
+- **Interactive Epistemic Gate slider**: Dynamically test escalation triggers when confidence drops into the doubt zone.
+- **Pre-loaded benchmark scenarios**: Grandparent wire scam, billing refund, database outage, and prompt injection.
+
+---
+
 ## 🔌 The Drop-in OpenAI Proxy (`reflex-proxy`)
 
 Already have thousands of lines of existing OpenAI or Anthropic code? **Zero code refactoring required.**
