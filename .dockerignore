@@ -1,0 +1,48 @@
+# Git & CI/CD
+.git
+.gitignore
+.github
+
+# Documentation & Benchmarks
+*.md
+!README.md
+tests
+benchmarks
+examples
+
+# Secrets & Environment Files
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.crt
+*.p12
+*.jsonl
+*.csv
+credentials.json
+client_secret*.json
+service-account*.json
+
+# Python & Build Cache
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+build
+dist
+*.egg-info
+.eggs
+.venv
+venv
+env
+.cache
+.pytest_cache
+.coverage
+htmlcov
+
+# OS & Logs
+.DS_Store
+*.log
+logs
+tmp

@@ -1,21 +1,160 @@
-# Byte-compiled / optimized / DLL files
+# ==============================================================================
+# Reflex AI Security & Repository Hygiene GitIgnore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Secrets, Credentials, Private Keys & Environment Variables (STRICT SECURITY)
+# ------------------------------------------------------------------------------
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.pkcs12
+*.pfx
+*.p12
+*.crt
+*.cer
+*.der
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+*.pub
+known_hosts
+credentials.json
+client_secret*.json
+service-account*.json
+service_account*.json
+google-services.json
+GoogleService-Info.plist
+auth.json
+token.json
+tokens.json
+secrets.json
+secrets.yaml
+secrets.yml
+.netrc
+
+# ------------------------------------------------------------------------------
+# 2. Datasets, Training Dumps & Large Model Weights (Zero Accidental Data Leak)
+# ------------------------------------------------------------------------------
+*.onnx
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.h5
+*.pb
+*.tflite
+*.jsonl
+*.csv
+*.parquet
+*.feather
+*.arrow
+*.sqlite
+*.sqlite3
+*.db
+decision_dataset.jsonl
+leaderboard.md
+
+# ------------------------------------------------------------------------------
+# 3. Python Bytecode, C-Extensions & Build Distributions
+# ------------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
-
-# macOS system files
-.DS_Store
-
-# Environments & Packaging
-.env
-.venv
-env/
-venv/
+*.so
+*.dylib
+*.dll
 build/
+develop-eggs/
 dist/
-*.egg-info/
+downloads/
+eggs/
 .eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# IDE files
-.vscode/
+# ------------------------------------------------------------------------------
+# 4. Virtual Environments & Local Caches
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.cache/
+tmp/
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# ------------------------------------------------------------------------------
+# 5. Testing, Code Coverage & Linting Artifacts
+# ------------------------------------------------------------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# ------------------------------------------------------------------------------
+# 6. Logging, Diagnostics & Tracing Outputs
+# ------------------------------------------------------------------------------
+*.log
+logs/
+*.trace
+trace.json
+
+# ------------------------------------------------------------------------------
+# 7. Operating System & IDE Files
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editors & IDEs
 .idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# ------------------------------------------------------------------------------
+# 8. Container & Orchestration Overrides
+# ------------------------------------------------------------------------------
+docker-compose.override.yml
+.docker/
