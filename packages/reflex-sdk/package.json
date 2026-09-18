@@ -1,0 +1,45 @@
+{
+  "name": "@reflex-ai/sdk",
+  "version": "0.2.0",
+  "description": "Universal System-1 AI Runtime & Dual-Brain Gateway for Edge, Cloudflare Workers, Node.js, and Browsers",
+  "main": "./index.js",
+  "module": "./index.js",
+  "types": "./index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    }
+  },
+  "scripts": {
+    "test": "node --test test/test_reflex.mjs"
+  },
+  "keywords": [
+    "ai",
+    "system-1",
+    "edge",
+    "cloudflare-workers",
+    "fast-routing",
+    "semantic-router",
+    "guardrails",
+    "dual-brain",
+    "low-latency",
+    "reflex"
+  ],
+  "author": "Reflex AI Team",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bhavikprit/reflex-ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bhavikprit/reflex-ai/issues"
+  },
+  "homepage": "https://github.com/bhavikprit/reflex-ai#readme",
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

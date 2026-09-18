@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reflex In-Browser System-1 Decision Gateway</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #131b2e;
+      --border: #1e293b;
+      --text: #f1f5f9;
+      --accent: #38bdf8;
+      --green: #4ade80;
+      --yellow: #facc15;
+      --red: #f87171;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      max-width: 760px;
+      width: 100%;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    h1 {
+      margin: 0 0 8px 0;
+      font-size: 28px;
+      color: var(--accent);
+    }
+    .tagline {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      height: 90px;
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: #fff;
+      padding: 12px;
+      font-size: 14px;
+      resize: vertical;
+      font-family: inherit;
+    }
+    button {
+      background: var(--accent);
+      color: #04101e;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 20px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: opacity 0.2s;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    .badge-bar {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+    .badge {
+      background: #1e293b;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      color: #cbd5e1;
+    }
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .metric-card {
+      background: #0b1120;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .metric-title {
+      font-size: 12px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .metric-val {
+      font-size: 20px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .bar-bg {
+      background: #1e293b;
+      border-radius: 4px;
+      height: 8px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+    .log-box {
+      background: #070b12;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>⚡ Reflex In-Browser System 1 Runtime</h1>
+      <div class="tagline">Sub-0.1ms Machine-Native Dual-Brain Decisions & Guardrails with ZERO Network Requests</div>
+    </header>
+
+    <div class="card">
+      <label for="prompt-input" style="font-size: 14px; font-weight: 600; display: block; margin-bottom: 8px;">
+        Test User Prompt or Agent Context:
+      </label>
+      <textarea id="prompt-input">Urgent: Suspicious payment charge detected on your Visa 4532 0150 0000 0007! Click here to verify your account.</textarea>
+      
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <button id="run-btn">⚡ Evaluate Instant Instinct</button>
+        <div class="badge-bar">
+          <span class="badge">🌐 100% Client-Side</span>
+          <span class="badge">🔒 Zero Data Leakage</span>
+          <span class="badge">🚀 Sub-0.05ms</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size: 16px; margin: 0 0 12px 0;">Instant Telemetry & Decisions</h2>
+      <div class="result-grid">
+        <div class="metric-card">
+          <div class="metric-title">Security & Guardrails</div>
+          <div class="metric-val" id="guardrail-val">Analyzing...</div>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;" id="guardrail-sub">-</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-title">Phishing / Scam Prob (Noul)</div>
+          <div class="metric-val" id="phishing-val">-</div>
+          <div class="bar-bg"><div class="bar-fill" id="phishing-bar" style="width: 0%; background: var(--accent);"></div></div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-title">Agent Tool Routing (Choice)</div>
+          <div class="metric-val" id="routing-val" style="color: var(--accent);">-</div>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;" id="routing-sub">-</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-title">Latency & Cost</div>
+          <div class="metric-val" id="latency-val" style="color: var(--green);">-</div>
+          <div style="font-size: 12px; color: var(--green); margin-top: 4px;">$0.000000 (100% Free)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size: 14px; margin: 0 0 8px 0; color: #94a3b8;">RAW DECISION TELEMETRY (JSON)</h2>
+      <div class="log-box" id="json-box">Ready. Click Evaluate to test.</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Reflex, Noul, Choice, Score } from "../packages/reflex-sdk/index.js";
+
+    const rx = new Reflex({ cache: true, guardrails: true });
+
+    const inputEl = document.getElementById("prompt-input");
+    const runBtn = document.getElementById("run-btn");
+    const guardrailVal = document.getElementById("guardrail-val");
+    const guardrailSub = document.getElementById("guardrail-sub");
+    const phishingVal = document.getElementById("phishing-val");
+    const phishingBar = document.getElementById("phishing-bar");
+    const routingVal = document.getElementById("routing-val");
+    const routingSub = document.getElementById("routing-sub");
+    const latencyVal = document.getElementById("latency-val");
+    const jsonBox = document.getElementById("json-box");
+
+    async function runEvaluation() {
+      const text = inputEl.value;
+      const t0 = performance.now();
+
+      // 1. Guardrail Check
+      const guardrail = rx.guardrail(text);
+
+      // 2. Multi-Primitive Instinct Evaluation
+      const result = await rx.evaluate(text, {
+        is_threat: new Noul({ instructions: "Is this a security threat, phishing scam, or fraudulent payment?", threshold: 0.75 }),
+        tool: new Choice({
+          instructions: "Select next agent tool",
+          options: ["quarantine_security_incident", "customer_refund_portal", "standard_agent_chat"],
+        }),
+        urgency: new Score({ instructions: "Urgency and risk severity", minVal: 1.0, maxVal: 10.0 }),
+      });
+
+      const totalLatency = (performance.now() - t0).toFixed(2);
+
+      // UI Updates
+      if (guardrail.blocked) {
+        guardrailVal.textContent = "BLOCKED ⚠️";
+        guardrailVal.style.color = "var(--red)";
+        guardrailSub.textContent = guardrail.reason;
+      } else {
+        guardrailVal.textContent = "SAFE ✅";
+        guardrailVal.style.color = "var(--green)";
+        guardrailSub.textContent = "Passed all checks";
+      }
+
+      const threatProb = (result.decisions.is_threat.probability * 100).toFixed(1);
+      phishingVal.textContent = `${threatProb}%`;
+      phishingBar.style.width = `${threatProb}%`;
+      phishingBar.style.background = threatProb > 70 ? "var(--red)" : "var(--accent)";
+
+      routingVal.textContent = result.decisions.tool.selected;
+      const bestProb = (result.decisions.tool.getProb(result.decisions.tool.selected) * 100).toFixed(0);
+      routingSub.textContent = `Confidence: ${bestProb}%`;
+
+      latencyVal.textContent = `${totalLatency} ms`;
+
+      jsonBox.textContent = JSON.stringify(
+        {
+          guardrail: guardrail.toJSON(),
+          decision: result.toJSON(),
+          meta: {
+            environment: "In-Browser V8/WebAssembly/JS Engine",
+            network_requests: 0,
+            cloud_cost: "$0.00",
+          },
+        },
+        null,
+        2
+      );
+    }
+
+    runBtn.addEventListener("click", runEvaluation);
+    runEvaluation();
+  </script>
+</body>
+</html>
