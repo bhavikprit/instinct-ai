@@ -47,6 +47,11 @@ def main():
     q_parser.add_argument("model_path", help="Path to input .onnx model file")
     q_parser.add_argument("--output", default=None, help="Path for quantized output .onnx file")
 
+    # Command: serve-api (Production REST API microservice gateway)
+    api_parser = subparsers.add_parser("serve-api", help="Start production REST API gateway with Prometheus metrics")
+    api_parser.add_argument("--host", default="0.0.0.0", help="Host address (default: 0.0.0.0)")
+    api_parser.add_argument("--port", type=int, default=8000, help="Port (default: 8000)")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -54,6 +59,13 @@ def main():
             start_proxy(host=args.host, port=args.port)
         except KeyboardInterrupt:
             print("\nShutting down Reflex Proxy...")
+            sys.exit(0)
+    elif args.command == "serve-api":
+        from reflex.server import start_server
+        try:
+            start_server(host=args.host, port=args.port)
+        except KeyboardInterrupt:
+            print("\nShutting down Reflex API Gateway...")
             sys.exit(0)
     elif args.command == "playground":
         from reflex.web.playground import start_playground

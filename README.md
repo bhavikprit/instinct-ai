@@ -266,6 +266,26 @@ response = client.chat.completions.create(
 
 ---
 
+## 🚀 Production REST API Gateway & Prometheus Telemetry
+
+Deploy Reflex as an enterprise microservice in Kubernetes or Docker with built-in Prometheus monitoring:
+
+### 1. Launch Gateway
+```bash
+reflex serve-api --host 0.0.0.0 --port 8000
+# Or via Docker:
+docker compose up -d
+```
+
+### 2. Available Endpoints:
+* `POST /v1/evaluate` — Machine-native decision evaluation (`Noul`, `Choice`, `Score`).
+* `POST /v1/guardrails` — Sub-1ms prompt injection, jailbreak, and PII scanner.
+* `POST /v1/tools/route` — Dynamic candidate tool pruning for OpenAI/Anthropic agents.
+* `GET  /metrics` — **Standard Prometheus exposition format** (`reflex_requests_total`, `reflex_cost_saved_usd`, `reflex_latency_ms{quantile="0.50"}`).
+* `GET  /health` — Kubernetes liveness/readiness probe.
+
+---
+
 ## 📊 DecisionBench Standardized Benchmark
 
 Run the standardized benchmark testing calibration (ECE), latency, and injection stress:
@@ -306,7 +326,11 @@ python3 -m benchmarks.decision_bench
    - [x] Sub-2ms `FastToolRouter` for dynamic function calling pruning
    - [x] Slashes prompt tokens by up to 80% with native OpenAI support
    - [x] `reflex.export` INT8 dynamic quantization and temperature scaling
- - [ ] **Phase 8: Pretrained Canonical Weights**
+ - [x] **Phase 8: Production Microservice & Prometheus Telemetry**
+   - [x] Multi-threaded REST gateway (`reflex serve-api --port 8000`)
+   - [x] Prometheus-compatible metrics (`GET /metrics`) tracking cost savings
+   - [x] Production Dockerfile and docker-compose orchestration
+ - [ ] **Phase 9: Pretrained Canonical Weights**
    - [ ] Release fine-tuned `Reflex-0.5B` ONNX checkpoints on HuggingFace
 
 ---

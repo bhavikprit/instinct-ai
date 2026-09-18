@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  reflex-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: reflex-ai:latest
+    container_name: reflex-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
