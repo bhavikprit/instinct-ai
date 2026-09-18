@@ -63,7 +63,8 @@ class LocalEngine(BaseBackend):
         alarm_tokens = {
             "scam", "fraud", "wire", "urgent", "phishing", "attack", "critical", "breach", 
             "refund", "stolen", "cancel", "intrusion", "leak", "leaked", "credential", 
-            "credentials", "compromised", "unauthorized", "override", "jailbreak", "hacked"
+            "credentials", "compromised", "unauthorized", "override", "jailbreak", "hacked",
+            "emergency", "fire", "danger", "alert", "failure", "money", "down", "outage"
         }
         overlap = len(state_tokens & alarm_tokens)
         is_threat_q = any(w in instructions.lower() for w in ["injection", "attack", "malicious", "bypass", "scam", "fraud", "threat", "incident", "danger"])
