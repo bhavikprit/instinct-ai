@@ -12,6 +12,7 @@ from reflex.backends.typesafe import TypeSafeBackend
 from reflex.backends.local import LocalEngine
 from reflex.backends.fallback import FallbackLLMBackend
 from reflex.backends.onnx_engine import ONNXEngine
+from reflex.embeddings import PureSemanticEngine
 
 
 class Reflex:
@@ -51,6 +52,8 @@ class Reflex:
             self.backend = backend
         elif backend == "local":
             self.backend = LocalEngine()
+        elif backend in ("semantic", "embeddings"):
+            self.backend = PureSemanticEngine(**backend_kwargs)
         elif backend in ("onnx", "neural"):
             self.backend = ONNXEngine(model_path=model_path, **backend_kwargs)
         elif backend in ("typesafe", "jev"):

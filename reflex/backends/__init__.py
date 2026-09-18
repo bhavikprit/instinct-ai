@@ -7,6 +7,7 @@ from reflex.backends.typesafe import TypeSafeBackend
 from reflex.backends.local import LocalEngine
 from reflex.backends.fallback import FallbackLLMBackend
 from reflex.backends.onnx_engine import ONNXEngine
+from reflex.embeddings import PureSemanticEngine
 
 __all__ = [
     "BaseBackend",
@@ -14,4 +15,5 @@ __all__ = [
     "LocalEngine",
     "FallbackLLMBackend",
     "ONNXEngine",
+    "PureSemanticEngine",
 ]

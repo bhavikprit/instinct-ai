@@ -52,6 +52,10 @@ def main():
     api_parser.add_argument("--host", default="0.0.0.0", help="Host address (default: 0.0.0.0)")
     api_parser.add_argument("--port", type=int, default=8000, help="Port (default: 8000)")
 
+    # Command: benchmark (DecisionBench comparison runner)
+    bench_parser = subparsers.add_parser("benchmark", help="Run DecisionBench evaluation across backends")
+    bench_parser.add_argument("--output", default=None, help="Path to export Markdown leaderboard")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -60,6 +64,9 @@ def main():
         except KeyboardInterrupt:
             print("\nShutting down Reflex Proxy...")
             sys.exit(0)
+    elif args.command == "benchmark":
+        from reflex.eval import generate_leaderboard
+        print(generate_leaderboard(args.output))
     elif args.command == "serve-api":
         from reflex.server import start_server
         try:
