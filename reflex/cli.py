@@ -30,6 +30,12 @@ def main():
     # Command: mcp (Model Context Protocol stdio server)
     subparsers.add_parser("mcp", help="Start Model Context Protocol (MCP) server over stdio")
 
+    # Command: dataset-gen (OpenRLCD synthetic dataset generator)
+    ds_parser = subparsers.add_parser("dataset-gen", help="Generate calibrated synthetic decision dataset")
+    ds_parser.add_argument("--samples", type=int, default=100, help="Number of samples (default: 100)")
+    ds_parser.add_argument("--output", default="decision_dataset.jsonl", help="Output JSONL path")
+    ds_parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
+
     args = parser.parse_args()
 
     if args.command == "serve":
@@ -44,6 +50,12 @@ def main():
             start_mcp_server()
         except KeyboardInterrupt:
             sys.exit(0)
+    elif args.command == "dataset-gen":
+        from reflex.rlcd import generate_decision_dataset, save_dataset_jsonl
+        print(f"Generating {args.samples} calibrated decision samples (seed={args.seed})...")
+        samples = generate_decision_dataset(num_samples=args.samples, seed=args.seed)
+        save_dataset_jsonl(samples, args.output)
+        print(f"✅ Successfully saved dataset to {args.output}")
     elif args.command == "eval":
         rx = Reflex()
         if args.noul:

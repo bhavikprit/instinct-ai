@@ -6,6 +6,7 @@
 ---
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/bhavikprit/reflex-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/bhavikprit/reflex-ai/actions/workflows/ci.yml)
 [![Python Version](https://img.shields.io/badge/python-3.9%2B-brightgreen.svg)](pyproject.toml)
 [![Speed](https://img.shields.io/badge/latency-%3C15ms%20local-cyan.svg)](#benchmarks)
 [![Output Cost](https://img.shields.io/badge/output%20tokens-%240.00%20(FREE)-emerald.svg)](#why-reflex)
@@ -179,22 +180,25 @@ python3 -m benchmarks.decision_bench
 ---
 
 ## 🗺️ Project Roadmap
-
-- [x] **Phase 1: Core SDK & Drop-in Proxy**
-  - [x] Universal `Noul`, `Choice`, `Score` protocol
-  - [x] Multi-backend routing (Local, TypeSafe Jev, OpenRouter, Fallback)
-  - [x] Zero-dependency OpenAI-compatible reverse proxy
-- [x] **Phase 2: Framework Integrations & Agent Tools**
-  - [x] Model Context Protocol (MCP) server for Claude Desktop & Cursor
-  - [x] LangChain & LangGraph `ReflexRouterNode` and `ReflexGuardrailNode`
-  - [x] DecisionBench standardized benchmark suite
-- [ ] **Phase 3: Local Neural Engine & Quantized Weights (`reflex-local`)**
-  - [ ] ONNX Runtime & Apple Silicon Metal execution
-  - [ ] Automatic download manager for small open-weight heads
-- [ ] **Phase 4: OpenRLCD (Reinforcement Learning for Calibrated Decisions)**
-  - [ ] DecisionBench-25k dataset curation
-  - [ ] Open-source PyTorch training pipeline optimizing for Brier Score & ECE
-  - [ ] Release canonical `Reflex-0.5B` weights on HuggingFace
+ 
+ - [x] **Phase 1: Core SDK & Drop-in Proxy**
+   - [x] Universal `Noul`, `Choice`, `Score` protocol
+   - [x] Multi-backend routing (Local, TypeSafe Jev, OpenRouter, Fallback)
+   - [x] Zero-dependency OpenAI-compatible reverse proxy
+ - [x] **Phase 2: Framework Integrations & Agent Tools**
+   - [x] Model Context Protocol (MCP) server for Claude Desktop & Cursor
+   - [x] LangChain & LangGraph `ReflexRouterNode` and `ReflexGuardrailNode`
+   - [x] DecisionBench standardized benchmark suite
+ - [x] **Phase 3: Local Neural Engine (`reflex.backends.onnx_engine`)**
+   - [x] ONNX Runtime INT8 quantized execution with sub-5ms latency
+   - [x] Zero-dependency graceful fallback
+   - [x] Softmax probability calibration and temperature scaling
+ - [x] **Phase 4: OpenRLCD (Reinforcement Learning for Calibrated Decisions)**
+   - [x] Synthetic calibration dataset generator (`reflex dataset-gen`)
+   - [x] Standardized Brier Score & Expected Calibration Error (ECE) loss metrics
+   - [x] Epistemic entropy uncertainty scoring
+ - [ ] **Phase 5: Pretrained Model Weights**
+   - [ ] Release fine-tuned `Reflex-0.5B` ONNX checkpoints on HuggingFace
 
 ---
 
@@ -203,8 +207,8 @@ python3 -m benchmarks.decision_bench
 Reflex is an open-source project welcoming contributions from AI engineers, system architects, and researchers.
 
 ```bash
-git clone https://github.com/your-org/reflex.git
-cd reflex
+git clone https://github.com/bhavikprit/reflex-ai.git
+cd reflex-ai
 python3 -m unittest discover -s tests
 ```
 

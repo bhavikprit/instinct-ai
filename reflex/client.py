@@ -11,6 +11,7 @@ from reflex.backends.base import BaseBackend
 from reflex.backends.typesafe import TypeSafeBackend
 from reflex.backends.local import LocalEngine
 from reflex.backends.fallback import FallbackLLMBackend
+from reflex.backends.onnx_engine import ONNXEngine
 
 
 class Reflex:
@@ -38,15 +39,20 @@ class Reflex:
         self,
         backend: Union[str, BaseBackend] = "auto",
         policy: str = "dual-brain",
-        api_key: Optional[str] = None
+        api_key: Optional[str] = None,
+        model_path: Optional[str] = None,
+        **backend_kwargs,
     ):
         self.policy = policy
         self.api_key = api_key
+        self.model_path = model_path
 
         if isinstance(backend, BaseBackend):
             self.backend = backend
         elif backend == "local":
             self.backend = LocalEngine()
+        elif backend in ("onnx", "neural"):
+            self.backend = ONNXEngine(model_path=model_path, **backend_kwargs)
         elif backend in ("typesafe", "jev"):
             self.backend = TypeSafeBackend(api_key=api_key)
         elif backend == "fallback":
@@ -55,6 +61,8 @@ class Reflex:
             # Auto-detection policy
             if os.environ.get("TYPESAFE_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or api_key:
                 self.backend = TypeSafeBackend(api_key=api_key)
+            elif model_path and os.path.exists(model_path):
+                self.backend = ONNXEngine(model_path=model_path, **backend_kwargs)
             else:
                 self.backend = LocalEngine()
         else:

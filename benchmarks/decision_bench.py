@@ -8,8 +8,12 @@ Evaluates:
 
 from __future__ import annotations
 import math
+import os
+import sys
 import time
 from typing import List, Dict, Any
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from reflex.client import Reflex
 from reflex.primitives import Noul, Choice

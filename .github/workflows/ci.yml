@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Package (Zero-Dependency Core)
+      run: |
+        python -m pip install --upgrade pip
+        pip install .
+
+    - name: Run Unit Tests
+      run: |
+        python -m unittest discover -s tests -v
+
+    - name: Run DecisionBench Evaluation
+      run: |
+        python benchmarks/decision_bench.py
