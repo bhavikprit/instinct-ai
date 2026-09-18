@@ -23,14 +23,32 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Set up Node.js (for @reflex-ai/sdk)
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Compile Native C Engine (libreflex)
+      run: |
+        make -C reflex_c all
+        make -C reflex_c test
+
     - name: Install Package (Zero-Dependency Core)
       run: |
         python -m pip install --upgrade pip
         pip install .
 
-    - name: Run Unit Tests
+    - name: Run System Diagnostics (reflex doctor)
+      run: |
+        reflex doctor
+
+    - name: Run Python Unit Tests & Cross-Language Parity
       run: |
         python -m unittest discover -s tests -v
+
+    - name: Run Edge JavaScript SDK Tests (node --test)
+      run: |
+        node --test packages/reflex-sdk/test/test_reflex.mjs
 
     - name: Run DecisionBench Evaluation
       run: |

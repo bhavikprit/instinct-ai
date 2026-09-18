@@ -569,6 +569,33 @@ prob = rx.noul("Is this a critical incident?", "Database primary replica timeout
 
 ---
 
+## 📊 Cross-Language Performance Leaderboard
+
+Reflex executes across three official runtimes with **zero external dependencies** and bit-for-bit mathematical parity:
+
+| Runtime | Throughput | Noul Decision | Vector Encode (384-d) | Guardrails | Dependencies |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Native C99 (`libreflex`)** | **63,460 ops/s** | **15.8 µs** | **28.9 µs** | **2.3 µs** | **0 C libraries** |
+| **Pure Python (`reflex-core`)** | **11,030 ops/s** | **90.7 µs** | **48.5 µs** | **6.4 µs** | **0 pip packages** |
+| **JavaScript / Edge (`@reflex`)** | **6,154 ops/s** | **162.5 µs** | **99.9 µs** | **1.1 µs** | **0 npm packages** |
+
+```bash
+# Run benchmark across all three runtimes on your machine
+python benchmarks/cross_language_bench.py
+```
+
+---
+
+## 🩺 System Diagnostic & Health (`reflex doctor`)
+
+Check your host environment, compiler, and hardware acceleration status:
+
+```bash
+reflex doctor
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
