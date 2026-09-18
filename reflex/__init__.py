@@ -22,6 +22,8 @@ from reflex.streaming import (
 )
 from reflex.cache import InstinctCache
 from reflex.telemetry import OpenTelemetryTracer
+from reflex.feedback import FeedbackCollector
+from reflex.learning import SelfTuningInstinctHead, OnlineTuner
 from reflex.proxy import start_proxy
 
 __version__ = "0.2.0"
@@ -36,6 +38,9 @@ __all__ = [
     "PureSemanticEngine",
     "InstinctCache",
     "OpenTelemetryTracer",
+    "FeedbackCollector",
+    "SelfTuningInstinctHead",
+    "OnlineTuner",
     "list_models",
     "download_model",
     "MODEL_CATALOG",

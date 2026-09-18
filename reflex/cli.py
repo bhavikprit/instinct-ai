@@ -67,9 +67,31 @@ def main():
     repl_parser = subparsers.add_parser("repl", help="Start interactive System 1 decision terminal shell")
     repl_parser.add_argument("--backend", default="semantic", help="Initial backend (default: semantic)")
 
+    # Command: tune (Active learning offline/batch tuner)
+    tune_parser = subparsers.add_parser("tune", help="Fine-tune local instinct head from feedback dataset")
+    tune_parser.add_argument("--dataset", required=True, help="Path to feedback JSONL dataset")
+    tune_parser.add_argument("--output", default="reflex_weights.json", help="Path to export tuned weights JSON")
+    tune_parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs (default: 5)")
+    tune_parser.add_argument("--lr", type=float, default=0.05, help="Learning rate (default: 0.05)")
+
     args = parser.parse_args()
 
-    if args.command == "repl":
+    if args.command == "tune":
+        from reflex.feedback import FeedbackCollector
+        from reflex.learning import SelfTuningInstinctHead, OnlineTuner
+        collector = FeedbackCollector()
+        collector.load_jsonl(args.dataset)
+        samples = collector.get_samples()
+        print(f"\n🧠 Tuning Reflex Instinct Head on {len(samples)} feedback samples...")
+        head = SelfTuningInstinctHead()
+        tuner = OnlineTuner(head=head, lr=args.lr)
+        stats = tuner.tune_on_samples(samples, epochs=args.epochs)
+        head.save_weights(args.output)
+        print(f"✅ Finished {stats['epochs']} epochs:")
+        print(f" • Initial Loss : {stats['initial_loss']:.4f}")
+        print(f" • Final Loss   : {stats['final_loss']:.4f}")
+        print(f" • Saved Model  : {args.output}\n")
+    elif args.command == "repl":
         from reflex.repl import start_repl
         start_repl(initial_backend=args.backend)
     elif args.command == "serve":

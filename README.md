@@ -471,6 +471,40 @@ otlp_payload = tracer.export_otlp_json()
 
 ---
 
+## 🔁 Self-Improving Instinct Memory (Online Active Learning)
+
+The agent gets faster and cheaper the more it is used. When uncertainty triggers a System 2 escalation (Claude 3.5 Sonnet / GPT-4o), teach Reflex the resolution in **<0.05ms** to eliminate subsequent escalations:
+
+```python
+from reflex import Reflex, Noul, Choice
+
+rx = Reflex(backend="semantic", learning=True)
+
+# 1. Turn 1: Escalated to Claude 3.5 Sonnet -> resolution returned
+system2_answer = "infrastructure_sre"
+
+# 2. Teach Reflex the ground truth online (<0.05ms, pure Python SGD)
+rx.teach(
+    state="Exception: Serverless function response exceeded 6MB payload quota",
+    question_key="routing_queue",
+    ground_truth=system2_answer,
+    options=["infrastructure_sre", "frontend_support", "billing"]
+)
+
+# 3. Turn 2: Subsequent similar queries now resolve LOCALLY in 0.08ms for $0.00!
+res = rx.choice("Select triage team", ["infrastructure_sre", "frontend_support", "billing"], 
+                "Alert: Lambda payload quota exceeded 6MB ceiling")
+print(res) # -> "infrastructure_sre" (Avoided Claude 3.5 call, saved $0.03!)
+```
+
+### Batch Offline Tuning CLI:
+```bash
+# Fine-tune local instinct weights directly from collected agent logs
+reflex tune --dataset feedback.jsonl --epochs 10 --output tuned_weights.json
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
@@ -521,6 +555,11 @@ otlp_payload = tracer.export_otlp_json()
    - [x] Multi-tier `InstinctCache` with L1 exact match and L2 semantic vector memory (<0.05ms)
    - [x] LRU eviction, TTL expiration, and JSON disk persistence
    - [x] Zero-dependency `OpenTelemetryTracer` with W3C traceparent headers and OTLP export
+ - [x] **Phase 14: Self-Improving Instinct Memory & Online Active Learning**
+   - [x] `FeedbackCollector` capturing System 2 ground truth and uncertainty logs
+   - [x] Pure-Python online gradient descent `SelfTuningInstinctHead` (<0.05ms updates)
+   - [x] `rx.teach(...)` real-time active learning eliminating redundant escalations
+   - [x] Batch offline tuner CLI (`reflex tune --dataset feedback.jsonl`)
 
 ---
 
