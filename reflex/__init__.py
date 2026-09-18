@@ -20,6 +20,8 @@ from reflex.streaming import (
     StreamBlockedError,
     StreamingDecisionGate,
 )
+from reflex.cache import InstinctCache
+from reflex.telemetry import OpenTelemetryTracer
 from reflex.proxy import start_proxy
 
 __version__ = "0.2.0"
@@ -32,6 +34,8 @@ __all__ = [
     "DecisionResult",
     "SemanticVectorEncoder",
     "PureSemanticEngine",
+    "InstinctCache",
+    "OpenTelemetryTracer",
     "list_models",
     "download_model",
     "MODEL_CATALOG",

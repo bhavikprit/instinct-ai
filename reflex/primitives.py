@@ -142,6 +142,7 @@ class DecisionResult:
     input_tokens: int = 0
     output_tokens: int = 0
     cost_usd: float = 0.0
+    cached: bool = False
 
     def __getitem__(self, key: str) -> PrimitiveType:
         return self.decisions[key]
@@ -166,6 +167,7 @@ class DecisionResult:
                 "backend": self.backend,
                 "input_tokens": self.input_tokens,
                 "output_tokens": self.output_tokens,
-                "cost_usd": self.cost_usd
+                "cost_usd": self.cost_usd,
+                "cached": self.cached
             }
         }

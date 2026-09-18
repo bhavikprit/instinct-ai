@@ -13,6 +13,8 @@ from reflex.backends.local import LocalEngine
 from reflex.backends.fallback import FallbackLLMBackend
 from reflex.backends.onnx_engine import ONNXEngine
 from reflex.embeddings import PureSemanticEngine
+from reflex.cache import InstinctCache
+from reflex.telemetry import OpenTelemetryTracer
 
 
 class Reflex:
@@ -20,18 +22,7 @@ class Reflex:
     Reflex: The Universal System-1 Runtime & Dual-Brain Gateway.
     
     Usage:
-        rx = Reflex()
-        
-        # 1. Multi-primitive evaluation
-        result = rx.evaluate(
-            state="Incoming email: I need a refund for my order #1234",
-            questions={
-                "is_refund": Noul("Does the customer demand a refund?"),
-                "queue": Choice("Route to queue", options=["billing", "support", "sales"])
-            }
-        )
-        
-        # 2. Direct inline shortcuts
+        rx = Reflex(cache=True)
         is_scam_prob = rx.noul("Is this a phishing email?", email_text)
         target_tool = rx.choice("Next agent action", ["search", "calculator", "finish"], context)
     """
@@ -42,11 +33,22 @@ class Reflex:
         policy: str = "dual-brain",
         api_key: Optional[str] = None,
         model_path: Optional[str] = None,
+        cache: Union[bool, InstinctCache] = False,
+        tracer: Optional[OpenTelemetryTracer] = None,
         **backend_kwargs,
     ):
         self.policy = policy
         self.api_key = api_key
         self.model_path = model_path
+        self.tracer = tracer
+
+        # Cache setup
+        if isinstance(cache, InstinctCache):
+            self.cache = cache
+        elif cache is True:
+            self.cache = InstinctCache()
+        else:
+            self.cache = None
 
         if isinstance(backend, BaseBackend):
             self.backend = backend
@@ -73,7 +75,26 @@ class Reflex:
 
     def evaluate(self, state: str, questions: Dict[str, PrimitiveType]) -> DecisionResult:
         """Evaluates typed questions against state in a single pass."""
-        return self.backend.evaluate(state, questions)
+        if self.cache is not None:
+            cached_res = self.cache.get(state, questions)
+            if cached_res is not None:
+                if self.tracer is not None:
+                    with self.tracer.start_span("reflex.evaluate", attributes={"reflex.cached": True, "reflex.backend": cached_res.backend}):
+                        pass
+                return cached_res
+
+        if self.tracer is not None:
+            with self.tracer.start_span("reflex.evaluate", attributes={"reflex.backend": self.backend.name, "reflex.cached": False}) as span:
+                result = self.backend.evaluate(state, questions)
+                span.set_attribute("reflex.latency_ms", result.latency_ms)
+                span.set_attribute("reflex.cost_usd", result.cost_usd)
+        else:
+            result = self.backend.evaluate(state, questions)
+
+        if self.cache is not None:
+            self.cache.set(state, questions, result)
+
+        return result
 
     def noul(self, instructions: str, state: str, threshold: float = 0.85) -> float:
         """Direct shortcut returning calibrated probability float [0.0 - 1.0]."""
