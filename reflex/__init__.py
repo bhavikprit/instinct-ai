@@ -138,6 +138,11 @@ from reflex.crc import (
     ScoreRiskBound,
     DecisionRiskBound,
 )
+from reflex.aci import (
+    ACIConfig,
+    AdaptiveConformalTracker,
+    ACIStatus,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -255,6 +260,9 @@ __all__ = [
     "ConformalRiskController",
     "ScoreRiskBound",
     "DecisionRiskBound",
+    "ACIConfig",
+    "AdaptiveConformalTracker",
+    "ACIStatus",
 ]
 
 

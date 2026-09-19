@@ -320,10 +320,11 @@ class ConformalPredictor:
     # Inference & Prediction Sets
     # -------------------------------------------------------------------------
 
-    def predict_noul(self, noul: Noul) -> ConformalNoulResult:
+    def predict_noul(self, noul: Noul, alpha: Optional[float] = None) -> ConformalNoulResult:
         """
         Constructs a distribution-free conformal prediction set for a Noul decision.
         Guarantees P(true_label in C(X)) >= 1 - alpha.
+        If alpha is provided, computes quantiles dynamically on-the-fly (used for ACI).
         """
         if not self.is_calibrated:
             raise RuntimeError("ConformalPredictor is not calibrated. Call calibrate() first.")
@@ -335,10 +336,10 @@ class ConformalPredictor:
         score_true = 1.0 - p
         score_false = p
 
-        with self._lock:
-            q_true = self.noul_thresholds.get("true", 1.0)
-            q_false = self.noul_thresholds.get("false", 1.0)
+        effective_alpha = max(0.0001, min(0.9999, float(alpha))) if alpha is not None else self.config.alpha
+        effective_coverage = 1.0 - effective_alpha
 
+        with self._lock:
             scores_for_true = (
                 self.noul_cal_scores["true"]
                 if (self.config.mondrian and len(self.noul_cal_scores["true"]) >= self.config.min_calibration_samples)
@@ -349,6 +350,13 @@ class ConformalPredictor:
                 if (self.config.mondrian and len(self.noul_cal_scores["false"]) >= self.config.min_calibration_samples)
                 else self.noul_cal_scores["global"]
             )
+
+            if alpha is not None:
+                q_true = self._compute_conformal_quantile(scores_for_true, effective_alpha)
+                q_false = self._compute_conformal_quantile(scores_for_false, effective_alpha)
+            else:
+                q_true = self.noul_thresholds.get("true", 1.0)
+                q_false = self.noul_thresholds.get("false", 1.0)
 
         # Compute p-values: (1 + sum(I(s_cal >= s_test))) / (n + 1)
         p_val_true = self._compute_p_value(scores_for_true, score_true)
@@ -364,28 +372,32 @@ class ConformalPredictor:
             prediction_set=prediction_set,
             p_value_true=p_val_true,
             p_value_false=p_val_false,
-            alpha=self.config.alpha,
-            coverage_guarantee=self.config.coverage_guarantee,
+            alpha=effective_alpha,
+            coverage_guarantee=effective_coverage,
             instructions=noul.instructions,
             raw_probability=noul.probability,
         )
 
-    def predict_choice(self, choice: Choice) -> ConformalChoiceResult:
+    def predict_choice(self, choice: Choice, alpha: Optional[float] = None) -> ConformalChoiceResult:
         """
         Constructs a distribution-free conformal prediction set for a Choice decision
         using Adaptive Prediction Sets (APS).
         Guarantees P(true_option in C(X)) >= 1 - alpha.
+        If alpha is provided, computes quantiles dynamically on-the-fly (used for ACI).
         """
         if not self.is_calibrated:
             raise RuntimeError("ConformalPredictor is not calibrated. Call calibrate() first.")
+
+        effective_alpha = max(0.0001, min(0.9999, float(alpha))) if alpha is not None else self.config.alpha
+        effective_coverage = 1.0 - effective_alpha
 
         options = choice.options or list(choice.distribution.keys())
         if not options:
             return ConformalChoiceResult(
                 prediction_set=[],
                 p_values={},
-                alpha=self.config.alpha,
-                coverage_guarantee=self.config.coverage_guarantee,
+                alpha=effective_alpha,
+                coverage_guarantee=effective_coverage,
                 instructions=choice.instructions,
                 distribution=choice.distribution,
             )
@@ -410,7 +422,14 @@ class ConformalPredictor:
             # 2. Adaptive Prediction Sets (APS)
             # Sort candidate options descending by probability
             sorted_opts = sorted(options, key=lambda opt: choice.get_prob(opt), reverse=True)
-            q_cumsum = self.choice_cumsum_thresholds.get("global", 1.0 - self.config.alpha)
+            if alpha is not None:
+                q_cumsum = (
+                    self._compute_conformal_quantile(self.choice_cumsum_scores.get("global", []), effective_alpha)
+                    if len(self.choice_cumsum_scores.get("global", [])) > 0
+                    else (1.0 - effective_alpha)
+                )
+            else:
+                q_cumsum = self.choice_cumsum_thresholds.get("global", 1.0 - self.config.alpha)
 
             prediction_set: List[str] = []
             cumsum = 0.0
@@ -423,8 +442,8 @@ class ConformalPredictor:
         return ConformalChoiceResult(
             prediction_set=prediction_set,
             p_values=p_values,
-            alpha=self.config.alpha,
-            coverage_guarantee=self.config.coverage_guarantee,
+            alpha=effective_alpha,
+            coverage_guarantee=effective_coverage,
             instructions=choice.instructions,
             distribution=choice.distribution,
         )

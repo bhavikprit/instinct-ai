@@ -1296,6 +1296,16 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Deep `Reflex(crc=controller).evaluate()` integration attaching `res.risk_bounds` and managing automated escalation
    - [x] CLI inspection and risk benchmarking tools (`reflex crc info`, `reflex crc benchmark`)
    - [x] 18-test suite verification (`tests/test_crc.py`) and live rubric safety demonstration (`examples/34_conformal_risk_control.py`)
+ - [x] **Phase 35: Adaptive Conformal Inference (ACI) & Online Distribution Shift Adaptation (`reflex.aci`)**
+   - [x] Gibbs & Candès (2021, 2022) online quantile adaptation: $\alpha_{t+1} = \text{clamp}(\alpha_t + \gamma (\alpha - \text{err}_t), \alpha_{\min}, \alpha_{\max})$
+   - [x] Long-term empirical coverage guarantee $\approx 1 - \alpha$ under arbitrary non-stationary streams, concept drift, and adversarial covariate shift
+   - [x] Rolling window empirical coverage tracking ($W=100$), real-time drift score calculation, and automated drift alarms (`is_drifting`)
+   - [x] Asymmetric penalty weighting (`gamma_down_multiplier`) accelerating alpha reduction on safety-critical miscoverage
+   - [x] Zero-dependency binary persistence format (`.reflex-aci`, magic `RFAC`, 44-byte structured header, 32-bit CRC32 trailer)
+   - [x] Seamless `Reflex(conformal=cp, aci=tracker)` client runtime integration with dynamic $\alpha_t$ injection and automated System-2 fail-safe escalation
+   - [x] Online ground truth ingestion via `rx.record_feedback(key, true_value, prediction_set)`
+   - [x] CLI inspection and online shift benchmarking tools (`reflex aci info`, `reflex aci benchmark`)
+   - [x] 20-test suite verification (`tests/test_aci.py`) and live drift recovery demonstration (`examples/35_adaptive_conformal_inference_drift.py`)
 
 
 ---

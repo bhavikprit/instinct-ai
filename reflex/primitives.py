@@ -162,6 +162,7 @@ class DecisionResult:
     cached: bool = False
     conformal: Optional[Dict[str, Any]] = None
     risk_bounds: Optional[Dict[str, Any]] = None
+    aci: Optional[Dict[str, Any]] = None
     should_escalate: bool = False
 
     def __getitem__(self, key: str) -> PrimitiveType:
@@ -186,7 +187,7 @@ class DecisionResult:
         raise KeyError(f"Key '{key}' is not a Score primitive")
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d: Dict[str, Any] = {
             "decisions": {k: v.to_dict() for k, v in self.decisions.items()},
             "meta": {
                 "latency_ms": self.latency_ms,
@@ -197,3 +198,18 @@ class DecisionResult:
                 "cached": self.cached
             }
         }
+        if self.conformal is not None:
+            d["conformal"] = {
+                k: (v.to_dict() if hasattr(v, "to_dict") else v)
+                for k, v in self.conformal.items()
+            }
+        if self.risk_bounds is not None:
+            d["risk_bounds"] = {
+                k: (v.to_dict() if hasattr(v, "to_dict") else v)
+                for k, v in self.risk_bounds.items()
+            }
+        if self.aci is not None:
+            d["aci"] = self.aci
+        if self.should_escalate:
+            d["should_escalate"] = True
+        return d

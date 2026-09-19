@@ -72,6 +72,7 @@ class Reflex:
         ensemble: Optional[Union[str, InstinctEnsemble]] = None,
         conformal: Optional[Any] = None,
         crc: Optional[Any] = None,
+        aci: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -81,6 +82,7 @@ class Reflex:
         self.tracer = tracer
         self.conformal = conformal
         self.crc = crc
+        self.aci = aci
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -411,23 +413,32 @@ class Reflex:
                 policy_verdict=final_verdict or {"action": "ALLOW", "allowed": True},
             )
 
-        # 5. Conformal Prediction Epistemic Bounds & Calibration (Phase 33)
+        # 5. Conformal Prediction Epistemic Bounds & Calibration (Phase 33 & Phase 35 ACI)
         if self.conformal is not None and getattr(self.conformal, "is_calibrated", False):
             conformal_results = {}
             has_escalation = False
+            effective_alpha = self.aci.current_alpha if self.aci is not None else None
             for k, dec in result.decisions.items():
                 if isinstance(dec, Noul):
-                    c_res = self.conformal.predict_noul(dec)
+                    c_res = self.conformal.predict_noul(dec, alpha=effective_alpha)
                     conformal_results[k] = c_res
                     if c_res.should_escalate:
                         has_escalation = True
                 elif isinstance(dec, Choice):
-                    c_res = self.conformal.predict_choice(dec)
+                    c_res = self.conformal.predict_choice(dec, alpha=effective_alpha)
                     conformal_results[k] = c_res
                     if c_res.should_escalate:
                         has_escalation = True
             result.conformal = conformal_results
+            if self.aci is not None:
+                result.aci = self.aci.status().to_dict()
+                if self.aci.is_drifting:
+                    has_escalation = True
             result.should_escalate = has_escalation
+        elif self.aci is not None:
+            result.aci = self.aci.status().to_dict()
+            if self.aci.is_drifting:
+                result.should_escalate = True
 
         # 6. Conformal Risk Control (CRC) & Expected Loss Bounding (Phase 34)
         if self.crc is not None and getattr(self.crc, "is_calibrated", False):
@@ -549,6 +560,25 @@ class Reflex:
             self.mesh_node.broadcast_teach_update(sample_delta=1, asynchronous=True)
 
         return loss
+
+    def record_feedback(
+        self,
+        key: str,
+        true_value: Any,
+        prediction_set: Optional[Collection[Any]] = None,
+    ) -> None:
+        """
+        Records ground truth feedback for online adaptive conformal inference (Phase 35).
+        Updates ACI controller step: err_t = 1 if true_value not in prediction_set else 0.
+        """
+        if self.aci is not None:
+            if prediction_set is not None:
+                is_covered = true_value in prediction_set
+            elif isinstance(true_value, bool):
+                is_covered = bool(true_value)
+            else:
+                is_covered = True
+            self.aci.update(is_covered=is_covered)
 
     def sync_fleet(self) -> Dict[str, Any]:
         """Pings all fleet peers and returns cluster connectivity metrics."""
