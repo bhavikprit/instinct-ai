@@ -64,11 +64,28 @@ class SemanticVectorEncoder:
         vec[idx] += sign * weight
 
 
+    def encode_quantized_i8(self, text: str) -> Tuple[bytes, float]:
+        """Encodes text into an INT8 quantized 384-dimensional vector and scale factor."""
+        from reflex.simd import get_simd_engine
+        vec = self.encode(text)
+        return get_simd_engine().quantize_i8(vec)
+
+    def encode_binary(self, text: str) -> bytes:
+        """Encodes text into a 384-bit (48-byte) binary embedding for instant Hamming similarity."""
+        from reflex.simd import get_simd_engine
+        vec = self.encode(text)
+        return get_simd_engine().binarize_384(vec)
+
+
 def cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
-    """Computes dot product between two unit-normalized vectors."""
+    """Computes dot product between two unit-normalized vectors using SIMD acceleration."""
     if len(vec_a) != len(vec_b):
         raise ValueError("Vector dimensions must match.")
-    return sum(a * b for a, b in zip(vec_a, vec_b))
+    try:
+        from reflex.simd import get_simd_engine
+        return get_simd_engine().cosine_similarity(vec_a, vec_b)
+    except Exception:
+        return sum(a * b for a, b in zip(vec_a, vec_b))
 
 
 class PureSemanticEngine(BaseBackend):

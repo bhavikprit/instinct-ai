@@ -294,6 +294,15 @@ def main():
     ipc_stats.add_argument("--socket", default="/tmp/reflex_ipc.sock", help="Unix domain socket path")
     ipc_stats.add_argument("--shm-name", default="reflex_shm_ring", help="POSIX shared memory name")
 
+    # Command: simd (Hardware-Accelerated SIMD Kernel & Quantization - Phase 28)
+    simd_parser = subparsers.add_parser("simd", help="Inspect and benchmark hardware SIMD vector kernel and quantization")
+    simd_sub = simd_parser.add_subparsers(dest="simd_action", required=True)
+
+    simd_info = simd_sub.add_parser("info", help="Display CPU architecture, vector extensions, and native SIMD library status")
+
+    simd_bench = simd_sub.add_parser("benchmark", help="Benchmark FP32 SIMD, INT8, and 1-bit binary dot product performance")
+    simd_bench.add_argument("--iterations", type=int, default=100000, help="Number of benchmark iterations (default: 100,000)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -662,6 +671,76 @@ def main():
                 print(json.dumps(stats, indent=2))
             finally:
                 client.close()
+    elif args.command == "simd":
+        from reflex.simd import get_simd_engine
+        simd = get_simd_engine()
+        caps = simd.features
+        if args.simd_action == "info":
+            print("=" * 65)
+            print("⚡ Reflex Hardware-Accelerated SIMD Kernel (Phase 28)")
+            print("=" * 65)
+            print(f" • Architecture       : {caps.arch}")
+            print(f" • Native libreflex   : {'🟢 Loaded' if caps.native_lib_loaded else '⚠️ Pure-Python Fallback'}")
+            print(f" • ARM NEON Support   : {'✅ Active' if caps.has_neon else '❌ Unavailable'}")
+            print(f" • x86_64 AVX2        : {'✅ Active' if caps.has_avx2 else '❌ Unavailable'}")
+            print(f" • x86_64 AVX-512     : {'✅ Active' if caps.has_avx512 else '❌ Unavailable'}")
+            print(f" • Fused Multiply-Add : {'✅ Active' if caps.has_fma else '❌ Unavailable'}")
+            print(f" • Hardware POPCOUNT  : {'✅ Active' if caps.has_popcnt else '❌ Unavailable'}")
+            print("=" * 65)
+        elif args.simd_action == "benchmark":
+            iterations = args.iterations
+            print("=" * 75)
+            print(f"⚡ Reflex SIMD Vector Benchmark ({iterations:,} iterations, 384 dimensions)")
+            print("=" * 75)
+
+            v1 = [(0.05 * ((i * 7) % 23 - 11)) for i in range(384)]
+            v2 = [(0.04 * ((i * 13) % 29 - 14)) for i in range(384)]
+
+            # 1. Pure Python Scalar
+            t0 = time.perf_counter()
+            for _ in range(max(1000, iterations // 10)):
+                _ = sum(a * b for a, b in zip(v1, v2))
+            dt_scalar = (time.perf_counter() - t0) * (iterations / max(1000, iterations // 10))
+            ns_scalar = (dt_scalar / iterations) * 1e9
+
+            # 2. FP32 SIMD
+            import ctypes
+            arr1 = (ctypes.c_float * 384)(*v1)
+            arr2 = (ctypes.c_float * 384)(*v2)
+            t0 = time.perf_counter()
+            for _ in range(iterations):
+                simd.dot_product_f32(arr1, arr2)
+            dt_simd = time.perf_counter() - t0
+            ns_simd = (dt_simd / iterations) * 1e9
+
+            # 3. INT8 Quantized SIMD
+            q1, s1 = simd.quantize_i8(v1)
+            q2, s2 = simd.quantize_i8(v2)
+            t0 = time.perf_counter()
+            for _ in range(iterations):
+                simd.dot_product_i8(q1, s1, q2, s2)
+            dt_i8 = time.perf_counter() - t0
+            ns_i8 = (dt_i8 / iterations) * 1e9
+
+            # 4. 1-Bit Binary Sign Quantization (Hamming)
+            b1 = simd.binarize_384(v1)
+            b2 = simd.binarize_384(v2)
+            t0 = time.perf_counter()
+            for _ in range(iterations):
+                simd.binary_similarity_384(b1, b2)
+            dt_bin = time.perf_counter() - t0
+            ns_bin = (dt_bin / iterations) * 1e9
+
+            headers = f"{'Kernel Mode':<26} | {'Latency (ns)':<14} | {'Throughput':<16} | {'Memory (bytes)':<14}"
+            print(headers)
+            print("-" * 75)
+            print(f"{'Scalar Python (Float32)':<26} | {ns_scalar:<14.1f} | {1e9/max(1.0, ns_scalar):>12,.0f} ops/s | {'1,536 B':<14}")
+            print(f"{'SIMD Vectorized (Float32)':<26} | {ns_simd:<14.1f} | {1e9/max(1.0, ns_simd):>12,.0f} ops/s | {'1,536 B':<14}")
+            print(f"{'INT8 Quantized (4x)':<26} | {ns_i8:<14.1f} | {1e9/max(1.0, ns_i8):>12,.0f} ops/s | {'384 B':<14}")
+            print(f"{'1-Bit Binary Hamming (32x)':<26} | {ns_bin:<14.1f} | {1e9/max(1.0, ns_bin):>12,.0f} ops/s | {'48 B':<14}")
+            print("=" * 75)
+            print(f"🚀 FP32 SIMD Speedup    : {ns_scalar / max(1.0, ns_simd):.1f}x vs pure Python")
+            print(f"⚡ 1-Bit Hamming Speedup: {ns_scalar / max(1.0, ns_bin):.1f}x vs pure Python (32x memory compression)\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))

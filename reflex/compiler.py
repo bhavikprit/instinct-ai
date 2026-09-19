@@ -133,6 +133,26 @@ class CompiledInstinct:
         self.compiled_at = compiled_at or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         self.version = version
         self._encoder = SemanticVectorEncoder()
+        from reflex.simd import get_simd_engine
+        self._simd = get_simd_engine()
+        self.quantization = "fp32"
+        self.quantized_weights = {}
+        self.scales = {}
+
+    def quantize(self, mode: str = "int8") -> "CompiledInstinct":
+        """
+        Quantizes FP32 weights to INT8 to accelerate inference and reduce memory footprint.
+        """
+        if mode != "int8":
+            raise ValueError(f"Unsupported quantization mode: {mode}")
+        self.quantization = "int8"
+        self.quantized_weights = {}
+        self.scales = {}
+        for key, w in self.weights.items():
+            q_bytes, scale = self._simd.quantize_i8(w)
+            self.quantized_weights[key] = q_bytes
+            self.scales[key] = scale
+        return self
 
     def predict(self, state: str) -> DecisionResult:
         """
@@ -144,11 +164,20 @@ class CompiledInstinct:
         decisions = {}
         if self.decision_type == "choice":
             logits = []
-            for opt in self.options:
-                w = self.weights.get(opt, [0.0] * len(vec))
-                b = self.biases.get(opt, 0.0)
-                z = sum(wi * xi for wi, xi in zip(w, vec)) + b
-                logits.append(z)
+            if self.quantization == "int8" and self.quantized_weights:
+                q_vec, s_vec = self._simd.quantize_i8(vec)
+                for opt in self.options:
+                    w_q = self.quantized_weights.get(opt, b"")
+                    w_s = self.scales.get(opt, 1.0)
+                    b = self.biases.get(opt, 0.0)
+                    z = self._simd.dot_product_i8(w_q, w_s, q_vec, s_vec) + b
+                    logits.append(z)
+            else:
+                for opt in self.options:
+                    w = self.weights.get(opt, [0.0] * len(vec))
+                    b = self.biases.get(opt, 0.0)
+                    z = self._simd.dot_product_f32(w, vec) + b
+                    logits.append(z)
 
             probs = _softmax(logits, temperature=self.temperature)
             dist = {opt: round(p, 4) for opt, p in zip(self.options, probs)}
@@ -166,7 +195,7 @@ class CompiledInstinct:
         elif self.decision_type == "noul":
             w = self.weights.get("noul", [0.0] * len(vec))
             b = self.biases.get("noul", 0.0)
-            z = (sum(wi * xi for wi, xi in zip(w, vec)) + b) / self.temperature
+            z = (self._simd.dot_product_f32(w, vec) + b) / self.temperature
             prob = _sigmoid(z)
 
             noul_obj = Noul(
@@ -178,7 +207,7 @@ class CompiledInstinct:
         else:
             w = self.weights.get("score", [0.0] * len(vec))
             b = self.biases.get("score", 0.0)
-            z = (sum(wi * xi for wi, xi in zip(w, vec)) + b) / self.temperature
+            z = (self._simd.dot_product_f32(w, vec) + b) / self.temperature
             norm_val = _sigmoid(z)
             score_val = round(1.0 + (norm_val * 9.0), 2)  # Scale 1.0 - 10.0
 

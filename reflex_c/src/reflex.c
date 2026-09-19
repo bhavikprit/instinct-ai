@@ -272,11 +272,7 @@ void reflex_encode_384(const char* text, float* out_vec) {
 }
 
 float reflex_cosine_similarity(const float* vec_a, const float* vec_b, int dim) {
-    double dot = 0.0;
-    for (int i = 0; i < dim; i++) {
-        dot += (double)vec_a[i] * (double)vec_b[i];
-    }
-    return (float)dot;
+    return reflex_cosine_similarity_f32_simd(vec_a, vec_b, dim);
 }
 
 /* --- Decision Primitives --- */

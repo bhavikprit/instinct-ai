@@ -93,6 +93,12 @@ from reflex.shm import (
     SlotState,
     IPCOpCode,
 )
+from reflex.simd import (
+    SimdEngine,
+    get_simd_engine,
+    CPUFeatures,
+    detect_cpu_features,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -179,6 +185,10 @@ __all__ = [
     "SHMConfig",
     "SlotState",
     "IPCOpCode",
+    "SimdEngine",
+    "get_simd_engine",
+    "CPUFeatures",
+    "detect_cpu_features",
 ]
 
 

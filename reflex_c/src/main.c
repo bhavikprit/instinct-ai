@@ -89,6 +89,59 @@ int main(int argc, char** argv) {
     printf("   • Reason      : %s\n", guard_res.reason);
     printf("   • Category    : %s\n\n", guard_res.category);
 
+    // 5. Benchmark SIMD Dot Product & Quantization (Phase 28)
+    reflex_simd_caps_t caps;
+    reflex_detect_simd_capabilities(&caps);
+    printf("5. Hardware-Accelerated SIMD Kernel (Phase 28):\n");
+    printf("   • Detected CPU Arch: %s (NEON=%d, AVX2=%d, POPCNT=%d)\n",
+           caps.arch_name, caps.has_neon, caps.has_avx2, caps.has_popcnt);
+
+    float vec_b[REFLEX_VECTOR_DIM];
+    for (int i = 0; i < REFLEX_VECTOR_DIM; i++) vec_b[i] = vec[REFLEX_VECTOR_DIM - 1 - i];
+
+    // FP32 SIMD Dot Product
+    t0 = clock();
+    float dot_simd = 0.0f;
+    for (int i = 0; i < iterations * 5; i++) {
+        dot_simd = reflex_dot_product_f32_simd(vec, vec_b, REFLEX_VECTOR_DIM);
+    }
+    t1 = clock();
+    total_sec = (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+    double ns_per_op = (total_sec / (iterations * 5)) * 1e9;
+    printf("   • FP32 SIMD Dot Product : %.1f ns/op (sim=%.4f)\n", ns_per_op, dot_simd);
+
+    // INT8 Quantized Dot Product
+    int8_t q_a[REFLEX_VECTOR_DIM], q_b[REFLEX_VECTOR_DIM];
+    float scale_a = 0.0f, scale_b = 0.0f;
+    reflex_quantize_i8(vec, q_a, REFLEX_VECTOR_DIM, &scale_a);
+    reflex_quantize_i8(vec_b, q_b, REFLEX_VECTOR_DIM, &scale_b);
+
+    t0 = clock();
+    float q_sim = 0.0f;
+    for (int i = 0; i < iterations * 5; i++) {
+        q_sim = reflex_quantized_similarity_i8(q_a, scale_a, q_b, scale_b, REFLEX_VECTOR_DIM);
+    }
+    t1 = clock();
+    total_sec = (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+    ns_per_op = (total_sec / (iterations * 5)) * 1e9;
+    printf("   • INT8 Quantized Dot    : %.1f ns/op (sim=%.4f)\n", ns_per_op, q_sim);
+
+    // 1-Bit Binary Sign Quantization & Hamming Distance
+    uint64_t bin_a[6], bin_b[6];
+    reflex_binarize_384(vec, bin_a);
+    reflex_binarize_384(vec_b, bin_b);
+
+    t0 = clock();
+    float b_sim = 0.0f;
+    for (int i = 0; i < iterations * 5; i++) {
+        b_sim = reflex_binary_similarity_384(bin_a, bin_b);
+    }
+    t1 = clock();
+    total_sec = (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+    ns_per_op = (total_sec / (iterations * 5)) * 1e9;
+    printf("   • 1-Bit Binary Hamming  : %.1f ns/op (sim=%.4f, 48 bytes!)\n\n",
+           ns_per_op, b_sim);
+
     printf("✅ All native C99 tests completed successfully with zero memory errors!\n");
     return 0;
 }

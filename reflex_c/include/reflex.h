@@ -11,6 +11,7 @@ extern "C" {
 #endif
 
 #include <stddef.h>
+#include "reflex_simd.h"
 
 #define REFLEX_VERSION "0.2.0"
 #define REFLEX_VECTOR_DIM 384
