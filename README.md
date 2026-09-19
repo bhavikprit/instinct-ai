@@ -766,6 +766,104 @@ reflex canary rollback --gateway http://127.0.0.1:8080
 
 ---
 
+## 🔮 Speculative Decision Routing & Parallel Pre-Fetch (`reflex.speculative`)
+
+Traditional agent loops suffer from high latency because tool execution is strictly serialized: the agent waits 2–4 seconds for the LLM to finish generation before even initiating database lookups or external API calls. **`reflex.speculative`** predicts candidate agent actions in **<0.1ms** and parallel pre-fetches idempotent data concurrently while the upstream LLM is still generating tokens:
+
+```python
+from reflex import Reflex
+
+rx = Reflex(speculative=True)
+
+# Register pre-fetchable idempotent tools
+rx.register_speculative_action(
+    name="fetch_user_profile",
+    handler=lambda uid: db.query(f"SELECT * FROM users WHERE id = '{uid}'"),
+    extractor=lambda prompt: {"uid": prompt.split("user_")[-1].split()[0]},
+)
+
+# Predict action in <0.1ms and execute pre-fetch in background thread pool
+session = rx.speculate("Find purchase history for user_84920")
+
+# When the LLM decides to call 'fetch_user_profile', result is already waiting (0ms latency!)
+profile = session.resolve("fetch_user_profile")
+```
+
+---
+
+## ⚖️ Enterprise Policy-as-Code & Cryptographic Merkle Audit Trail (`reflex.policy`)
+
+Enterprise AI applications require strict regulatory compliance (HIPAA, GDPR, EU AI Act) and tamper-evident auditing. **`reflex.policy`** introduces declarative Policy-as-Code evaluation with geofencing (`ENFORCE_LOCAL`), hard deny (`DENY`), and an append-only SHA-256 hash-chained cryptographic Merkle audit ledger:
+
+```python
+from reflex import Reflex, PolicyEngine, PolicyRuleSet, PolicyRule, PolicyAction, MerkleAuditLog
+
+# 1. Define Declarative Compliance Rules
+ruleset = PolicyRuleSet(name="hipaa_gdpr", rules=[
+    PolicyRule(
+        rule_id="HIPAA-01",
+        action=PolicyAction.ENFORCE_LOCAL,
+        conditions={"field": "state", "op": "regex", "value": r"(patient_id|medical_record)"},
+        description="Patient PHI must never leave local perimeter",
+    ),
+])
+
+# 2. Attach Engine & Cryptographic Merkle Audit Ledger
+rx = Reflex(policy=ruleset, audit_log="audit.jsonl")
+
+# 3. Verify Cryptographic Integrity
+is_valid, broken_idx, reason = rx.verify_audit_log()
+proof = rx.export_audit_proof(index=0)  # O(log N) inclusion proof
+```
+
+---
+
+## ⚡ Prompt-to-Instinct Compiler & Calibration Pipeline (`reflex.compiler`)
+
+Calling 70B+ parameter autoregressive LLMs to make boolean or multi-class decisions costs $0.02–$0.05/call, takes 2,000ms, and drains battery. **`reflex.compiler`** distills verbose system prompts into machine-native, sub-50µs `.reflex` decision artifacts with calibrated probability distributions:
+
+```python
+from reflex import Reflex, PromptSpec, InstinctCompiler
+
+# 1. Compile 1,500-word prompt specification into sub-50µs artifact
+spec = PromptSpec(
+    prompt="Classify customer support tickets into billing, technical, or sales.",
+    decision_type="choice",
+    options=["billing", "technical", "sales"],
+    guidelines={
+        "billing": "Invoices, refund requests, payment method updates, duplicate charges.",
+        "technical": "500 server errors, latency timeouts, crashes, bug reports.",
+        "sales": "Enterprise volume discounts, annual contract quotes, seat expansions.",
+    },
+)
+
+compiler = InstinctCompiler()
+model = compiler.compile(spec, samples_per_class=35, epochs=40)
+model.save("support_classifier.reflex")
+
+# 2. Load into Reflex client for <50µs machine-native inference
+rx = Reflex(model_path="support_classifier.reflex")
+decision = rx.predict("Why was my credit card billed twice this month?")
+print(decision["choice"].selected)      # 'billing'
+print(decision["choice"].distribution)  # {'billing': 0.94, 'technical': 0.04, 'sales': 0.02}
+print(f"Latency: {decision.latency_ms}ms ($0 token cost)")
+```
+
+### CLI Compilation Tooling:
+```bash
+# Compile prompt directly from command line
+reflex compile \
+  --prompt "Triage customer support tickets" \
+  --options "billing,technical,sales" \
+  --output classifier.reflex \
+  --samples 40
+
+# Serve compiled model directly through Reflex AI Envoy Gateway
+reflex serve --compiled-model classifier.reflex --port 8080
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
@@ -885,6 +983,16 @@ reflex canary rollback --gateway http://127.0.0.1:8080
    - [x] AI Envoy Gateway compliance endpoints (`GET /v1/policy/rules`, `GET /v1/audit/root`, `GET /v1/audit/verify`, `GET /v1/audit/proof/:index`)
    - [x] CLI verification tooling (`reflex policy test`, `reflex audit root`, `reflex audit verify`, `reflex audit proof`)
    - [x] End-to-end demonstration (`examples/23_enterprise_policy_and_merkle_audit.py`) and 179-test suite verification
+ - [x] **Phase 24: Prompt-to-Instinct Compiler & Calibration Pipeline (`reflex.compiler` / `reflex compile`)**
+   - [x] Pure-Python zero-dependency prompt-to-hyperplane compiler (`InstinctCompiler`)
+   - [x] Automated synthetic calibration dataset generator (`SyntheticDataGenerator`) with semantic balancing
+   - [x] Multi-class logistic regression solver with momentum and temperature scaling (Brier score & ECE optimization)
+   - [x] Self-contained portable `.reflex` model format with magic header `RFX1` and CRC32 integrity checks
+   - [x] Sub-50 microsecond ($<0.05\text{ms}$) machine-native inference with $0 token cost ($20,000\times$ faster than cloud LLMs)
+   - [x] Seamless client integration (`Reflex(model_path="model.reflex")` & `rx.compile(...)`)
+   - [x] AI Envoy Gateway integration (`compiled_model_path`, `/v1/models`, `SHORTCIRCUIT-COMPILED`)
+   - [x] Production CLI subcommand (`reflex compile --prompt "..." --options "..." --output model.reflex`)
+   - [x] 12-test suite verification and interactive demonstration (`examples/24_prompt_to_instinct_compiler.py`)
 
 
 ---

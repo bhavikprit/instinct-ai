@@ -71,6 +71,13 @@ from reflex.policy import (
     MerkleTree,
     MerkleAuditLog,
 )
+from reflex.compiler import (
+    PromptSpec,
+    CompiledInstinct,
+    SyntheticDataGenerator,
+    InstinctCompiler,
+    CalibrationMetrics,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -141,6 +148,11 @@ __all__ = [
     "AuditEntry",
     "MerkleTree",
     "MerkleAuditLog",
+    "PromptSpec",
+    "CompiledInstinct",
+    "SyntheticDataGenerator",
+    "InstinctCompiler",
+    "CalibrationMetrics",
 ]
 
 

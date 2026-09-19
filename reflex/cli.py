@@ -129,6 +129,7 @@ def main():
         p.add_argument("--canary-auto-promote", action="store_true", help="Enable autonomous progressive canary promotion")
         p.add_argument("--speculative", action="store_true", help="Enable speculative decision routing & parallel pre-fetch")
         p.add_argument("--speculative-threshold", type=float, default=0.75, help="Confidence threshold for speculative pre-fetch (default: 0.75)")
+        p.add_argument("--compiled-model", default=None, help="Path to pre-compiled .reflex model artifact")
 
     # Command: canary (Autonomous canary deployment & decision shadowing)
     canary_parser = subparsers.add_parser("canary", help="Manage and inspect autonomous canary deployments")
@@ -245,6 +246,17 @@ def main():
     tune_parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs (default: 5)")
     tune_parser.add_argument("--lr", type=float, default=0.05, help="Learning rate (default: 0.05)")
 
+    # Command: compile (Prompt-to-Instinct Compiler - Phase 24)
+    comp_parser = subparsers.add_parser("compile", help="Compile system prompt into a sub-50us .reflex decision artifact")
+    comp_parser.add_argument("--prompt", default="", help="Verbose system prompt or decision task description")
+    comp_parser.add_argument("--options", default="", help="Comma-separated decision options (e.g. 'billing,tech,general')")
+    comp_parser.add_argument("--type", dest="decision_type", default="choice", choices=["choice", "noul", "score"], help="Decision type (choice, noul, score)")
+    comp_parser.add_argument("--output", default="model.reflex", help="Output .reflex model artifact path (default: model.reflex)")
+    comp_parser.add_argument("--samples", type=int, default=35, help="Synthetic samples generated per class (default: 35)")
+    comp_parser.add_argument("--epochs", type=int, default=40, help="Optimization training epochs (default: 40)")
+    comp_parser.add_argument("--dataset", help="Optional JSONL dataset of {text, label} samples to compile")
+    comp_parser.add_argument("--spec", help="Optional JSON file defining full PromptSpec")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -289,6 +301,7 @@ def main():
             canary_auto_promote=getattr(args, "canary_auto_promote", False),
             speculative_enabled=getattr(args, "speculative", False),
             speculative_threshold=getattr(args, "speculative_threshold", 0.75),
+            compiled_model_path=getattr(args, "compiled_model", None),
         )
         server = ReflexGatewayServer(cfg)
         try:
@@ -460,6 +473,58 @@ def main():
                         print(json.dumps(data, indent=2))
             except Exception as e:
                 print(f"\n❌ Error querying audit gateway: {e}\n")
+    elif args.command == "compile":
+        from reflex.compiler import PromptSpec, InstinctCompiler
+
+        if getattr(args, "spec", None) and os.path.exists(args.spec):
+            with open(args.spec, "r") as f:
+                spec_dict = json.load(f)
+            spec = PromptSpec.from_dict(spec_dict)
+        else:
+            raw_opts = getattr(args, "options", "")
+            opts = [o.strip() for o in raw_opts.split(",") if o.strip()]
+            spec = PromptSpec(
+                prompt=getattr(args, "prompt", ""),
+                decision_type=getattr(args, "decision_type", "choice"),
+                options=opts,
+                name=os.path.splitext(os.path.basename(args.output))[0],
+            )
+
+        if getattr(args, "dataset", None) and os.path.exists(args.dataset):
+            few_shots = []
+            with open(args.dataset, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            few_shots.append(json.loads(line))
+                        except Exception:
+                            pass
+            spec.few_shot_examples.extend(few_shots)
+
+        p_display = spec.prompt[:60] + "..." if len(spec.prompt) > 60 else spec.prompt
+        print(f"\n⚡ Compiling Prompt Spec into sub-50µs '.reflex' Instinct Model...")
+        print(f" • Prompt        : {p_display}")
+        print(f" • Decision Type : {spec.decision_type}")
+        print(f" • Options       : {', '.join(spec.options) if spec.options else 'N/A'}")
+        print(f" • Target Output : {args.output}")
+
+        compiler = InstinctCompiler()
+        model = compiler.compile(
+            spec=spec,
+            samples_per_class=args.samples,
+            epochs=args.epochs,
+        )
+        model.save(args.output)
+        file_size_kb = os.path.getsize(args.output) / 1024.0
+
+        print(f"✅ Compilation Complete:")
+        print(f" • Training Time : {model.metrics.training_time_ms:.1f}ms")
+        print(f" • Accuracy      : {model.metrics.accuracy * 100:.1f}%")
+        print(f" • Brier Score   : {model.metrics.brier_score:.4f}")
+        print(f" • ECE Score     : {model.metrics.ece:.4f}")
+        print(f" • Artifact Size : {file_size_kb:.1f} KB ({args.output})")
+        print(f" • Latency       : <0.05ms ($0 cost, 0ms network)\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))

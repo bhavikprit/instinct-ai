@@ -71,6 +71,8 @@ class GatewayConfig:
     audit_enabled: bool = False
     audit_log_path: Optional[str] = None
     audit_log: Optional[MerkleAuditLog] = None
+    compiled_model_path: Optional[str] = None
+    compiled_instinct: Optional[Any] = None
 
 
 
@@ -258,6 +260,7 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
     speculative_engine: Optional[SpeculativeEngine] = None
     policy_engine: Optional[PolicyEngine] = None
     audit_log: Optional[MerkleAuditLog] = None
+    compiled_instinct: Optional[Any] = None
 
     @classmethod
     def initialize(cls, config: GatewayConfig):
@@ -273,6 +276,15 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
             )
         else:
             cls.cache = None
+
+        # Compiled Instinct (Phase 24)
+        if config.compiled_instinct is not None:
+            cls.compiled_instinct = config.compiled_instinct
+        elif config.compiled_model_path and os.path.exists(config.compiled_model_path):
+            from reflex.compiler import CompiledInstinct
+            cls.compiled_instinct = CompiledInstinct.load(config.compiled_model_path)
+        else:
+            cls.compiled_instinct = None
 
         if config.mesh_enabled or config.mesh_peers:
             mesh_cfg = MeshConfig(
@@ -393,13 +405,21 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json(400, {"error": "Instinct Mesh is not enabled on this gateway"})
         elif norm_path in ("/v1/models", "/models"):
+            models_list = [
+                {"id": "reflex-system1", "object": "model", "owned_by": "reflex-ai"},
+                {"id": "gpt-4o", "object": "model", "owned_by": "openai"},
+                {"id": "claude-3-5-sonnet-20241022", "object": "model", "owned_by": "anthropic"},
+            ]
+            if self.compiled_instinct is not None:
+                models_list.insert(0, {
+                    "id": f"reflex-compiled:{self.compiled_instinct.name}",
+                    "object": "model",
+                    "owned_by": "reflex-compiler",
+                    "decision_type": self.compiled_instinct.decision_type,
+                })
             self._send_json(200, {
                 "object": "list",
-                "data": [
-                    {"id": "reflex-system1", "object": "model", "owned_by": "reflex-ai"},
-                    {"id": "gpt-4o", "object": "model", "owned_by": "openai"},
-                    {"id": "claude-3-5-sonnet-20241022", "object": "model", "owned_by": "anthropic"},
-                ]
+                "data": models_list,
             })
         else:
             self.send_error(404, f"Endpoint '{self.path}' not found")
@@ -605,8 +625,13 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         response_format = req_json.get("response_format", {})
         is_decision = self._is_decision_candidate(combined_prompt, response_format)
         force_local = (policy_verdict is not None and policy_verdict.action == PolicyAction.ENFORCE_LOCAL)
+        is_compiled_model = (self.compiled_instinct is not None and (
+            model == f"reflex-compiled:{self.compiled_instinct.name}" or
+            model.startswith("reflex-compiled") or
+            model == "reflex-system1"
+        ))
 
-        if (self.config.system1_routing_enabled and is_decision) or force_local:
+        if (self.config.system1_routing_enabled and (is_decision or is_compiled_model)) or force_local:
             res_payload = self._fulfill_system1(req_json, combined_prompt)
             latency_ms = (time.perf_counter() - t0) * 1000.0
             
@@ -620,8 +645,9 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
             if self.cache is not None:
                 self.cache.set(combined_prompt, res_payload, model=model)
 
+            cache_header = "SHORTCIRCUIT-COMPILED" if self.compiled_instinct is not None else "SHORTCIRCUIT-SYSTEM1"
             extra_headers = {
-                "X-Reflex-Cache": "SHORTCIRCUIT-SYSTEM1",
+                "X-Reflex-Cache": cache_header,
                 "X-Reflex-Latency-Ms": f"{latency_ms:.2f}",
                 "X-Reflex-Cost-Saved-USD": f"{self.config.estimated_upstream_cost_usd:.4f}",
             }
@@ -662,6 +688,45 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
 
     def _fulfill_system1(self, req_json: dict, prompt: str) -> dict:
         """Resolve a structured decision request locally in <15ms with $0 cost."""
+        if self.compiled_instinct is not None:
+            comp_res = self.compiled_instinct.predict(prompt)
+            content_dict = {}
+            if self.compiled_instinct.decision_type == "choice":
+                c = comp_res.decisions.get("choice")
+                content_dict["selected"] = c.selected if c else ""
+                content_dict["distribution"] = c.distribution if c else {}
+            elif self.compiled_instinct.decision_type == "noul":
+                n = comp_res.decisions.get("noul")
+                content_dict["is_true"] = n.is_true if n else False
+                content_dict["probability"] = n.probability if n else 0.5
+            elif self.compiled_instinct.decision_type == "score":
+                s = comp_res.decisions.get("score")
+                content_dict["score"] = s.score if s else 5.0
+                content_dict["confidence"] = s.confidence if s else 0.95
+
+            return {
+                "id": f"chatcmpl-compiled-{int(time.time() * 1000)}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": f"reflex-compiled:{self.compiled_instinct.name}",
+                "system_fingerprint": "fp_reflex_compiler_1_0",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": json.dumps(content_dict),
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": len(prompt.split()),
+                    "completion_tokens": len(json.dumps(content_dict).split()),
+                    "total_tokens": len(prompt.split()) + len(json.dumps(content_dict).split()),
+                },
+            }
+
         questions = {
             "is_urgent": Noul("Is this message urgent or high priority?"),
             "category": Choice("Select category", options=["support", "billing", "security", "general"]),

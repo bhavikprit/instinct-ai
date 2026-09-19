@@ -28,6 +28,7 @@ from reflex.policy import (
     PolicyVerdict,
     MerkleAuditLog,
 )
+from reflex.compiler import CompiledInstinct, InstinctCompiler, PromptSpec
 
 
 class Reflex:
@@ -65,6 +66,7 @@ class Reflex:
         speculative: bool = False,
         speculative_engine: Optional[SpeculativeEngine] = None,
         audit_log: Optional[Union[str, MerkleAuditLog]] = None,
+        compiled_instinct: Optional[CompiledInstinct] = None,
         **backend_kwargs,
     ):
 
@@ -72,6 +74,14 @@ class Reflex:
         self.api_key = api_key
         self.model_path = model_path
         self.tracer = tracer
+
+        # Compiled Instinct setup (Phase 24)
+        if compiled_instinct is not None:
+            self.compiled_instinct: Optional[CompiledInstinct] = compiled_instinct
+        elif model_path and str(model_path).endswith(".reflex") and os.path.exists(model_path):
+            self.compiled_instinct = CompiledInstinct.load(model_path)
+        else:
+            self.compiled_instinct = None
 
         # Active Learning & Feedback setup
         if instinct_head is not None:
@@ -119,9 +129,13 @@ class Reflex:
             self.backend = TypeSafeBackend(api_key=api_key)
         elif backend == "fallback":
             self.backend = FallbackLLMBackend(api_key=api_key)
+        elif backend in ("compiled", "reflex"):
+            self.backend = PureSemanticEngine(**backend_kwargs)
         elif backend == "auto":
             # Auto-detection policy
-            if os.environ.get("TYPESAFE_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or api_key:
+            if self.compiled_instinct is not None:
+                self.backend = PureSemanticEngine(**backend_kwargs)
+            elif os.environ.get("TYPESAFE_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or api_key:
                 self.backend = TypeSafeBackend(api_key=api_key)
             elif model_path and os.path.exists(model_path):
                 self.backend = ONNXEngine(model_path=model_path, **backend_kwargs)
@@ -180,6 +194,46 @@ class Reflex:
                     with self.tracer.start_span("reflex.evaluate", attributes={"reflex.cached": True, "reflex.backend": cached_res.backend}):
                         pass
                 return cached_res
+
+        if self.compiled_instinct is not None:
+            if self.tracer is not None:
+                with self.tracer.start_span("reflex.evaluate", attributes={"reflex.backend": f"compiled:{self.compiled_instinct.name}", "reflex.cached": False}) as span:
+                    comp_res = self.compiled_instinct.predict(state)
+                    span.set_attribute("reflex.latency_ms", comp_res.latency_ms)
+                    span.set_attribute("reflex.cost_usd", 0.0)
+            else:
+                comp_res = self.compiled_instinct.predict(state)
+
+            decisions = {}
+            for k, q in questions.items():
+                if isinstance(q, Choice):
+                    c = comp_res.decisions.get("choice")
+                    if c:
+                        decisions[k] = q.resolve(c.selected, c.distribution or {})
+                    else:
+                        decisions[k] = q.resolve(self.compiled_instinct.options[0] if self.compiled_instinct.options else "", {})
+                elif isinstance(q, Noul):
+                    n = comp_res.decisions.get("noul")
+                    prob = n.probability if n else 0.5
+                    decisions[k] = q.resolve(prob)
+                elif isinstance(q, Score):
+                    s = comp_res.decisions.get("score")
+                    score_val = s.score if s else 5.0
+                    confidence = s.confidence if s else 0.95
+                    decisions[k] = q.resolve(score_val, confidence=confidence)
+                else:
+                    decisions[k] = q.resolve(None)
+            result = DecisionResult(
+                decisions=decisions,
+                latency_ms=comp_res.latency_ms,
+                backend=f"compiled:{self.compiled_instinct.name}",
+                input_tokens=comp_res.input_tokens,
+                output_tokens=comp_res.output_tokens,
+                cost_usd=0.0,
+            )
+            if self.cache is not None:
+                self.cache.set(state, questions, result)
+            return result
 
         if self.tracer is not None:
             with self.tracer.start_span("reflex.evaluate", attributes={"reflex.backend": self.backend.name, "reflex.cached": False}) as span:
@@ -473,3 +527,39 @@ class Reflex:
 
         scored_options.sort(key=lambda x: x[0], reverse=True)
         return scored_options[0][1]
+
+    def predict(self, state: str) -> DecisionResult:
+        """
+        Executes sub-50µs direct inference using the loaded compiled instinct head (Phase 24).
+        """
+        if self.compiled_instinct is None:
+            raise RuntimeError("No compiled .reflex model loaded in Reflex client. Use rx.compile(...) or provide model_path='*.reflex'.")
+        return self.compiled_instinct.predict(state)
+
+    def compile(
+        self,
+        prompt: str,
+        options: Optional[List[str]] = None,
+        guidelines: Optional[Dict[str, str]] = None,
+        decision_type: str = "choice",
+        name: str = "compiled_model",
+        samples_per_class: int = 35,
+        epochs: int = 40,
+        output_path: Optional[str] = None,
+    ) -> CompiledInstinct:
+        """
+        Compiles a prompt specification into a portable .reflex artifact (Phase 24).
+        """
+        spec = PromptSpec(
+            prompt=prompt,
+            decision_type=decision_type,
+            options=options or [],
+            guidelines=guidelines or {},
+            name=name,
+        )
+        compiler = InstinctCompiler()
+        model = compiler.compile(spec, samples_per_class=samples_per_class, epochs=epochs)
+        if output_path:
+            model.save(output_path)
+        self.compiled_instinct = model
+        return model
