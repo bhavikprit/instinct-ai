@@ -370,7 +370,10 @@ class PerceptualHasher:
     @staticmethod
     def hamming_distance(hash1: int, hash2: int) -> int:
         """Computes bit-difference count between two hashes (0 = identical)."""
-        return (hash1 ^ hash2).bit_count()
+        diff = hash1 ^ hash2
+        if hasattr(diff, "bit_count"):
+            return diff.bit_count()
+        return bin(diff).count("1")
 
     @staticmethod
     def extract_features(image: Union[RawImage, bytes, str], dim: int = 128) -> List[float]:
