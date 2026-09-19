@@ -29,6 +29,7 @@ from reflex.policy import (
     MerkleAuditLog,
 )
 from reflex.compiler import CompiledInstinct, InstinctCompiler, PromptSpec
+from reflex.ensemble import InstinctEnsemble, EnsembleResult
 
 
 class Reflex:
@@ -67,6 +68,7 @@ class Reflex:
         speculative_engine: Optional[SpeculativeEngine] = None,
         audit_log: Optional[Union[str, MerkleAuditLog]] = None,
         compiled_instinct: Optional[CompiledInstinct] = None,
+        ensemble: Optional[Union[str, InstinctEnsemble]] = None,
         **backend_kwargs,
     ):
 
@@ -74,6 +76,14 @@ class Reflex:
         self.api_key = api_key
         self.model_path = model_path
         self.tracer = tracer
+
+        # Mixture-of-Reflexes Ensemble setup (Phase 26)
+        if isinstance(ensemble, InstinctEnsemble):
+            self.ensemble: Optional[InstinctEnsemble] = ensemble
+        elif isinstance(ensemble, str) and os.path.exists(ensemble):
+            self.ensemble = InstinctEnsemble.load(ensemble)
+        else:
+            self.ensemble = None
 
         # Compiled Instinct setup (Phase 24)
         if compiled_instinct is not None:
@@ -194,6 +204,31 @@ class Reflex:
                     with self.tracer.start_span("reflex.evaluate", attributes={"reflex.cached": True, "reflex.backend": cached_res.backend}):
                         pass
                 return cached_res
+
+        if self.ensemble is not None:
+            ens_res = self.ensemble.cascade_predict(state)
+            decisions = {}
+            for k, q in questions.items():
+                if isinstance(q, Choice):
+                    decisions[k] = q.resolve(ens_res.selected, ens_res.blended_distribution or {})
+                elif isinstance(q, Noul):
+                    p = ens_res.blended_distribution.get("true", ens_res.confidence if ens_res.selected == "true" else (1.0 - ens_res.confidence))
+                    decisions[k] = q.resolve(p)
+                elif isinstance(q, Score):
+                    decisions[k] = q.resolve(ens_res.confidence * 10.0, confidence=1.0 - ens_res.entropy)
+                else:
+                    decisions[k] = q.resolve(ens_res.selected)
+            result = DecisionResult(
+                decisions=decisions,
+                latency_ms=ens_res.latency_ms,
+                backend=f"ensemble:{self.ensemble.name}:{ens_res.tier}",
+                input_tokens=len(state.split()),
+                output_tokens=0,
+                cost_usd=0.0,
+            )
+            if self.cache is not None:
+                self.cache.set(state, questions, result)
+            return result
 
         if self.compiled_instinct is not None:
             if self.tracer is not None:
@@ -563,3 +598,33 @@ class Reflex:
             model.save(output_path)
         self.compiled_instinct = model
         return model
+
+    def ensemble_predict(self, state: str, top_k: Optional[int] = None) -> EnsembleResult:
+        """
+        Executes a Mixture-of-Reflexes prediction across registered specialists (Phase 26).
+        """
+        if self.ensemble is None:
+            raise RuntimeError("No InstinctEnsemble configured in Reflex client. Pass ensemble=... to Reflex().")
+        return self.ensemble.predict(state, top_k=top_k)
+
+    def cascade_predict(
+        self,
+        state: str,
+        confidence_threshold: float = 0.85,
+        entropy_threshold: float = 0.40,
+        consensus_threshold: float = 0.65,
+        max_consensus_entropy: float = 0.70,
+    ) -> EnsembleResult:
+        """
+        Executes 3-tier hierarchical cascade routing across the ensemble (Phase 26).
+        """
+        if self.ensemble is None:
+            raise RuntimeError("No InstinctEnsemble configured in Reflex client. Pass ensemble=... to Reflex().")
+        return self.ensemble.cascade_predict(
+            state,
+            confidence_threshold=confidence_threshold,
+            entropy_threshold=entropy_threshold,
+            consensus_threshold=consensus_threshold,
+            max_consensus_entropy=max_consensus_entropy,
+        )
+

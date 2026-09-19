@@ -130,6 +130,7 @@ def main():
         p.add_argument("--speculative", action="store_true", help="Enable speculative decision routing & parallel pre-fetch")
         p.add_argument("--speculative-threshold", type=float, default=0.75, help="Confidence threshold for speculative pre-fetch (default: 0.75)")
         p.add_argument("--compiled-model", default=None, help="Path to pre-compiled .reflex model artifact")
+        p.add_argument("--ensemble", default=None, help="Path to pre-compiled .reflex-ensemble artifact")
 
     # Command: canary (Autonomous canary deployment & decision shadowing)
     canary_parser = subparsers.add_parser("canary", help="Manage and inspect autonomous canary deployments")
@@ -257,6 +258,19 @@ def main():
     comp_parser.add_argument("--dataset", help="Optional JSONL dataset of {text, label} samples to compile")
     comp_parser.add_argument("--spec", help="Optional JSON file defining full PromptSpec")
 
+    # Command: ensemble (Mixture-of-Reflexes & Hierarchical Instinct Ensembles - Phase 26)
+    ens_parser = subparsers.add_parser("ensemble", help="Inspect and evaluate Mixture-of-Reflexes ensembles")
+    ens_sub = ens_parser.add_subparsers(dest="ensemble_action", required=True)
+
+    ens_eval = ens_sub.add_parser("evaluate", help="Evaluate state through a .reflex-ensemble")
+    ens_eval.add_argument("--ensemble", required=True, help="Path to .reflex-ensemble artifact")
+    ens_eval.add_argument("--state", required=True, help="Input prompt or state description to evaluate")
+    ens_eval.add_argument("--top-k", type=int, default=2, help="Top-K specialists to blend (default: 2)")
+    ens_eval.add_argument("--cascade", action="store_true", help="Use 3-tier hierarchical cascade routing")
+
+    ens_info = ens_sub.add_parser("info", help="Display metadata and registered specialists of an ensemble")
+    ens_info.add_argument("--ensemble", required=True, help="Path to .reflex-ensemble artifact")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -302,6 +316,7 @@ def main():
             speculative_enabled=getattr(args, "speculative", False),
             speculative_threshold=getattr(args, "speculative_threshold", 0.75),
             compiled_model_path=getattr(args, "compiled_model", None),
+            ensemble_path=getattr(args, "ensemble", None),
         )
         server = ReflexGatewayServer(cfg)
         try:
@@ -525,6 +540,46 @@ def main():
         print(f" • ECE Score     : {model.metrics.ece:.4f}")
         print(f" • Artifact Size : {file_size_kb:.1f} KB ({args.output})")
         print(f" • Latency       : <0.05ms ($0 cost, 0ms network)\n")
+    elif args.command == "ensemble":
+        from reflex.ensemble import InstinctEnsemble
+        if not os.path.exists(args.ensemble):
+            print(f"❌ Error: Ensemble file '{args.ensemble}' not found.")
+            sys.exit(1)
+        ens = InstinctEnsemble.load(args.ensemble)
+        if args.ensemble_action == "info":
+            print("=" * 65)
+            print(f"🌐 Reflex Instinct Ensemble: {ens.name}")
+            print("=" * 65)
+            print(f" • Top-K Specialists   : {ens.top_k}")
+            print(f" • Temperature         : {ens.temperature}")
+            print(f" • Entropy Attenuation : {ens.entropy_attenuation}")
+            print(f" • Specialist Count    : {len(ens.specialists)}")
+            print("\nDomain Specialists:")
+            for s_name, spec in ens.specialists.items():
+                print(f"  - {s_name:<20} [Domain: {spec.domain:<12}] Prior Weight: {spec.weight}")
+                if spec.description:
+                    print(f"    Description: {spec.description}")
+            print("=" * 65)
+        elif args.ensemble_action == "evaluate":
+            if getattr(args, "cascade", False):
+                res = ens.cascade_predict(args.state)
+            else:
+                res = ens.predict(args.state, top_k=args.top_k)
+            print("=" * 65)
+            print(f"⚡ Mixture-of-Reflexes Result ({res.tier}):")
+            print("=" * 65)
+            print(f" • Selected Option    : {res.selected}")
+            print(f" • Blended Confidence : {res.confidence * 100:.1f}%")
+            print(f" • Shannon Entropy    : {res.entropy:.4f}")
+            print(f" • Routing Tier       : {res.tier}")
+            print(f" • System-2 Escalation: {'YES ⚠️' if res.routed_to_system2 else 'NO ✅'}")
+            print(f" • Evaluation Latency : {res.latency_ms:.2f} ms")
+            print("\nActive Specialist Contributions:")
+            for s_name, pred in res.specialist_predictions.items():
+                g_w = res.gating_weights.get(s_name, 0.0) * 100
+                v_w = res.voting_weights.get(s_name, 0.0) * 100
+                print(f"  • {s_name:<18} -> {pred['selected']:<12} (Conf: {pred['confidence']*100:.1f}%, Gate: {g_w:.1f}%, Vote: {v_w:.1f}%)")
+            print("=" * 65)
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))

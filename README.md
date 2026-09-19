@@ -870,6 +870,48 @@ reflex serve --compiled-model classifier.reflex --port 8080
 
 ---
 
+## 🧬 Mixture-of-Reflexes (MoR) & Hierarchical Instinct Ensembles (`reflex.ensemble`)
+
+Scale sub-millisecond System-1 reasoning across complex multi-domain enterprise fleets with zero cloud LLM latency:
+
+```python
+from reflex import Reflex
+from reflex.ensemble import SpecialistModel, InstinctEnsemble, HierarchicalCascade
+
+# 1. Assemble domain specialists (.reflex models) into an MoR Fleet
+ensemble = InstinctEnsemble(name="enterprise_fleet", top_k=2)
+ensemble.add_specialist(SpecialistModel(
+    name="security_head", domain="security", model=security_model,
+    keywords=["breach", "token", "password", "ssh", "injection"]
+))
+ensemble.add_specialist(SpecialistModel(
+    name="billing_head", domain="billing", model=billing_model,
+    keywords=["billing", "invoice", "charge", "refund", "receipt"]
+))
+
+# 2. 3-Tier Hierarchical Cascade Routing (<50µs)
+cascade = HierarchicalCascade(ensemble=ensemble)
+result = cascade.route("Can you send an updated VAT invoice receipt?")
+
+print(result.tier)       # 'L1_FAST_PATH' (<30µs)
+print(result.selected)   # 'billing' (Confidence: 94.2%)
+print(result.entropy)    # 0.28 (Low epistemic uncertainty -> Resolved locally for $0.00!)
+```
+
+### CLI Ensemble Inspection & Evaluation:
+```bash
+# Inspect registered specialists in a bundle
+reflex ensemble info --ensemble enterprise_fleet.reflex-ensemble
+
+# Evaluate an incoming request with 3-tier cascade routing
+reflex ensemble evaluate --ensemble enterprise_fleet.reflex-ensemble --state "Unsanitized SQL query in auth endpoint" --cascade
+
+# Serve ensemble directly on the AI Envoy Gateway
+reflex gateway --ensemble enterprise_fleet.reflex-ensemble --port 8080
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
@@ -1007,6 +1049,15 @@ reflex serve --compiled-model classifier.reflex --port 8080
    - [x] Full TypeScript definitions (`packages/reflex-sdk/index.d.ts`) and Rust crate exports
    - [x] Comprehensive cross-language unit tests and parity test suite (`tests/test_cross_language_compiler.py`)
    - [x] 3-runtime demonstration (`examples/25_cross_language_edge_runtime.py`) showing 100% mathematical parity across Python, Node.js, and Rust
+ - [x] **Phase 26: Mixture-of-Reflexes (MoR) & Hierarchical Instinct Ensembles (`reflex.ensemble`)**
+   - [x] Sub-50µs System-1 Gating Network (`MoRGatingNetwork`) with Top-K sparse routing and dense centroid projection
+   - [x] Epistemic uncertainty-attenuated Dirichlet voting weighted by Shannon entropy $H(P) = -\sum p_i \log_2(p_i)$
+   - [x] 3-Tier Hierarchical Cascade Router (`HierarchicalCascade`) with L1 Fast-Path (<30µs), L2 MoR Consensus (<80µs), and L3 System-2 Escalation
+   - [x] Self-contained portable `.reflex-ensemble` bundle format with magic header `RFXE` and CRC32 tamper detection
+   - [x] Reflex Client integration (`Reflex(ensemble=...)`, `rx.ensemble_predict()`, `rx.cascade_predict()`)
+   - [x] AI Envoy Gateway integration (`/v1/ensemble/predict`, `/v1/ensemble/stats`, `SHORTCIRCUIT-ENSEMBLE`)
+   - [x] CLI tooling (`reflex ensemble info`, `reflex ensemble evaluate`, `--ensemble` gateway flag)
+   - [x] 11-test suite verification (`tests/test_ensemble.py`) and multi-specialist enterprise fleet demonstration (`examples/26_mixture_of_reflexes_ensemble.py`)
 
 
 ---

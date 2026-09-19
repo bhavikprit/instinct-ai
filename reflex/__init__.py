@@ -78,6 +78,13 @@ from reflex.compiler import (
     InstinctCompiler,
     CalibrationMetrics,
 )
+from reflex.ensemble import (
+    SpecialistModel,
+    MoRGatingNetwork,
+    EnsembleResult,
+    InstinctEnsemble,
+    HierarchicalCascade,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -153,6 +160,11 @@ __all__ = [
     "SyntheticDataGenerator",
     "InstinctCompiler",
     "CalibrationMetrics",
+    "SpecialistModel",
+    "MoRGatingNetwork",
+    "EnsembleResult",
+    "InstinctEnsemble",
+    "HierarchicalCascade",
 ]
 
 

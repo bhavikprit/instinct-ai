@@ -73,6 +73,8 @@ class GatewayConfig:
     audit_log: Optional[MerkleAuditLog] = None
     compiled_model_path: Optional[str] = None
     compiled_instinct: Optional[Any] = None
+    ensemble_path: Optional[str] = None
+    ensemble: Optional[Any] = None
 
 
 
@@ -261,6 +263,7 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
     policy_engine: Optional[PolicyEngine] = None
     audit_log: Optional[MerkleAuditLog] = None
     compiled_instinct: Optional[Any] = None
+    ensemble: Optional[Any] = None
 
     @classmethod
     def initialize(cls, config: GatewayConfig):
@@ -276,6 +279,15 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
             )
         else:
             cls.cache = None
+
+        # Mixture-of-Reflexes Ensemble (Phase 26)
+        if config.ensemble is not None:
+            cls.ensemble = config.ensemble
+        elif config.ensemble_path and os.path.exists(config.ensemble_path):
+            from reflex.ensemble import InstinctEnsemble
+            cls.ensemble = InstinctEnsemble.load(config.ensemble_path)
+        else:
+            cls.ensemble = None
 
         # Compiled Instinct (Phase 24)
         if config.compiled_instinct is not None:
@@ -397,6 +409,16 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                     self._send_json(400, {"error": str(e)})
             else:
                 self._send_json(400, {"error": "Audit logging is not enabled on this gateway"})
+        elif norm_path in ("/v1/ensemble/stats", "/ensemble/stats"):
+            if self.ensemble is not None:
+                self._send_json(200, {
+                    "ensemble_name": self.ensemble.name,
+                    "specialists": list(self.ensemble.specialists.keys()),
+                    "top_k": self.ensemble.top_k,
+                    "stats": self.ensemble.stats,
+                })
+            else:
+                self._send_json(400, {"error": "Instinct Ensemble is not enabled on this gateway"})
         elif norm_path in ("/v1/mesh/peers", "/mesh/peers"):
 
             if self.mesh_node is not None:
@@ -410,6 +432,13 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 {"id": "gpt-4o", "object": "model", "owned_by": "openai"},
                 {"id": "claude-3-5-sonnet-20241022", "object": "model", "owned_by": "anthropic"},
             ]
+            if self.ensemble is not None:
+                models_list.insert(0, {
+                    "id": f"reflex-ensemble:{self.ensemble.name}",
+                    "object": "model",
+                    "owned_by": "reflex-ensemble",
+                    "specialists": list(self.ensemble.specialists.keys()),
+                })
             if self.compiled_instinct is not None:
                 models_list.insert(0, {
                     "id": f"reflex-compiled:{self.compiled_instinct.name}",
@@ -428,6 +457,27 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/v1/chat/completions", "/chat/completions"):
             self.handle_chat_completions()
+        elif norm_path in ("/v1/ensemble/predict", "/ensemble/predict"):
+            if self.ensemble is not None:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+                data = json.loads(body) if body else {}
+                state = data.get("state", "")
+                top_k = data.get("top_k", self.ensemble.top_k)
+                use_cascade = data.get("cascade", True)
+                if use_cascade:
+                    res = self.ensemble.cascade_predict(
+                        state,
+                        confidence_threshold=data.get("confidence_threshold", 0.85),
+                        entropy_threshold=data.get("entropy_threshold", 0.40),
+                        consensus_threshold=data.get("consensus_threshold", 0.65),
+                        max_consensus_entropy=data.get("max_consensus_entropy", 0.70),
+                    )
+                else:
+                    res = self.ensemble.predict(state, top_k=top_k)
+                self._send_json(200, res.to_dict())
+            else:
+                self._send_json(400, {"error": "Instinct Ensemble is not enabled on this gateway"})
         elif norm_path in ("/v1/policy/evaluate", "/policy/evaluate"):
             if self.policy_engine is not None:
                 content_len = int(self.headers.get("Content-Length", 0))
@@ -625,13 +675,17 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         response_format = req_json.get("response_format", {})
         is_decision = self._is_decision_candidate(combined_prompt, response_format)
         force_local = (policy_verdict is not None and policy_verdict.action == PolicyAction.ENFORCE_LOCAL)
+        is_ensemble_model = (self.ensemble is not None and (
+            model == f"reflex-ensemble:{self.ensemble.name}" or
+            model.startswith("reflex-ensemble")
+        ))
         is_compiled_model = (self.compiled_instinct is not None and (
             model == f"reflex-compiled:{self.compiled_instinct.name}" or
             model.startswith("reflex-compiled") or
             model == "reflex-system1"
         ))
 
-        if (self.config.system1_routing_enabled and (is_decision or is_compiled_model)) or force_local:
+        if (self.config.system1_routing_enabled and (is_decision or is_compiled_model or is_ensemble_model)) or force_local:
             res_payload = self._fulfill_system1(req_json, combined_prompt)
             latency_ms = (time.perf_counter() - t0) * 1000.0
             
@@ -645,7 +699,13 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
             if self.cache is not None:
                 self.cache.set(combined_prompt, res_payload, model=model)
 
-            cache_header = "SHORTCIRCUIT-COMPILED" if self.compiled_instinct is not None else "SHORTCIRCUIT-SYSTEM1"
+            if is_ensemble_model or self.ensemble is not None:
+                cache_header = "SHORTCIRCUIT-ENSEMBLE"
+            elif self.compiled_instinct is not None:
+                cache_header = "SHORTCIRCUIT-COMPILED"
+            else:
+                cache_header = "SHORTCIRCUIT-SYSTEM1"
+
             extra_headers = {
                 "X-Reflex-Cache": cache_header,
                 "X-Reflex-Latency-Ms": f"{latency_ms:.2f}",
@@ -688,6 +748,40 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
 
     def _fulfill_system1(self, req_json: dict, prompt: str) -> dict:
         """Resolve a structured decision request locally in <15ms with $0 cost."""
+        if self.ensemble is not None:
+            ens_res = self.ensemble.cascade_predict(prompt)
+            content_dict = {
+                "selected": ens_res.selected,
+                "confidence": ens_res.confidence,
+                "entropy": ens_res.entropy,
+                "tier": ens_res.tier,
+                "routed_to_system2": ens_res.routed_to_system2,
+                "distribution": ens_res.blended_distribution,
+                "specialist_predictions": ens_res.specialist_predictions,
+            }
+            return {
+                "id": f"chatcmpl-ensemble-{int(time.time() * 1000)}",
+                "object": "chat.completion",
+                "created": int(time.time()),
+                "model": f"reflex-ensemble:{self.ensemble.name}",
+                "system_fingerprint": "fp_reflex_ensemble_1_0",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": json.dumps(content_dict),
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": len(prompt.split()),
+                    "completion_tokens": len(json.dumps(content_dict).split()),
+                    "total_tokens": len(prompt.split()) + len(json.dumps(content_dict).split()),
+                },
+            }
+
         if self.compiled_instinct is not None:
             comp_res = self.compiled_instinct.predict(prompt)
             content_dict = {}
