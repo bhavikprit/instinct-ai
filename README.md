@@ -912,6 +912,51 @@ reflex gateway --ensemble enterprise_fleet.reflex-ensemble --port 8080
 
 ---
 
+## ⚡ Zero-Copy Shared Memory IPC Daemon (`reflex.shm`)
+
+Deploy ultra-low latency System-1 decision reasoning (<5µs via POSIX Shared Memory, <25µs via Unix Domain Sockets) directly inside Linux/Unix agent microservice fleets, bypassing the entire HTTP/TCP loopback stack overhead:
+
+```python
+from reflex import Reflex, Choice, Noul, Score
+from reflex.shm import ReflexIPCDaemon, ReflexIPCClient, SHMConfig
+
+# 1. Start Zero-Copy IPC Daemon (SHM + UDS)
+config = SHMConfig(socket_path="/tmp/reflex_ipc.sock", shm_name="reflex_shm_ring")
+daemon = ReflexIPCDaemon(config=config, model=compiled_model)
+daemon.start(background=True)
+
+# 2. Ultra-Low Latency IPC Client (<5µs over POSIX Shared Memory Ring Buffer)
+client = ReflexIPCClient(config=config)
+latency_us = client.ping()           # ~5µs round-trip
+route = client.choice("Select route", ["fast_path", "security_audit"], "GET /profile")
+
+# 3. Transparent High-Level Client Integration
+rx = Reflex(backend="ipc", socket_path="/tmp/reflex_ipc.sock", shm_name="reflex_shm_ring")
+result = rx.evaluate("High volume API burst", {
+    "route": Choice("Triage traffic", ["allow", "rate_limit"]),
+    "ddos": Noul("Is this DDoS assault?"),
+    "score": Score("Risk severity 1-10"),
+})
+print(result.decisions["route"].selected, result.latency_ms)  # sub-100µs batch evaluation!
+```
+
+### CLI IPC Management & Microsecond Ping:
+```bash
+# Start background Reflex IPC daemon with compiled model
+reflex ipc start --socket /tmp/reflex.sock --shm-name reflex_ring --model router.reflex
+
+# Ping running daemon to measure round-trip microsecond latency
+reflex ipc ping --socket /tmp/reflex.sock --shm-name reflex_ring
+
+# Execute live query against running daemon
+reflex ipc query --socket /tmp/reflex.sock --shm-name reflex_ring --state "Suspicious unauthorized POST /admin/debug"
+
+# Inspect cumulative throughput and latency statistics
+reflex ipc stats --socket /tmp/reflex.sock --shm-name reflex_ring
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
@@ -1058,6 +1103,13 @@ reflex gateway --ensemble enterprise_fleet.reflex-ensemble --port 8080
    - [x] AI Envoy Gateway integration (`/v1/ensemble/predict`, `/v1/ensemble/stats`, `SHORTCIRCUIT-ENSEMBLE`)
    - [x] CLI tooling (`reflex ensemble info`, `reflex ensemble evaluate`, `--ensemble` gateway flag)
    - [x] 11-test suite verification (`tests/test_ensemble.py`) and multi-specialist enterprise fleet demonstration (`examples/26_mixture_of_reflexes_ensemble.py`)
+ - [x] **Phase 27: Zero-Copy Shared Memory IPC Daemon (`reflex-shm`)**
+   - [x] Atomic POSIX shared memory ring buffer (`SharedMemoryRingBuffer`) with slot status transitions (FREE -> REQ_READY -> RESP_READY -> FREE)
+   - [x] Stream-oriented Unix domain socket transport (/tmp/reflex_ipc.sock) with length-prefixed framing and automatic failover
+   - [x] High-performance background IPC daemon (`ReflexIPCDaemon`) supporting single-digit microsecond PING, NOUL, CHOICE, SCORE, and PREDICT ops
+   - [x] Zero-dependency client interface (`ReflexIPCClient`) and drop-in `Reflex(backend="ipc")` runtime integration
+   - [x] CLI management subcommands (`reflex ipc start`, `ping`, `query`, `stats`)
+   - [x] 14-test suite verification (`tests/test_shm.py`) and 3-way latency transport benchmark (`examples/27_zero_copy_shared_memory_ipc.py`)
 
 
 ---

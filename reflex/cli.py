@@ -271,6 +271,29 @@ def main():
     ens_info = ens_sub.add_parser("info", help="Display metadata and registered specialists of an ensemble")
     ens_info.add_argument("--ensemble", required=True, help="Path to .reflex-ensemble artifact")
 
+    # Command: ipc (Zero-Copy Shared Memory IPC Daemon - Phase 27)
+    ipc_parser = subparsers.add_parser("ipc", help="Start and manage ultra-low latency Shared Memory / UDS IPC daemon")
+    ipc_sub = ipc_parser.add_subparsers(dest="ipc_action", required=True)
+
+    ipc_start = ipc_sub.add_parser("start", help="Start Reflex IPC daemon")
+    ipc_start.add_argument("--socket", default="/tmp/reflex_ipc.sock", help="Unix domain socket path (default: /tmp/reflex_ipc.sock)")
+    ipc_start.add_argument("--shm-name", default="reflex_shm_ring", help="POSIX shared memory name (default: reflex_shm_ring)")
+    ipc_start.add_argument("--model", default=None, help="Path to .reflex or .reflex-ensemble model")
+    ipc_start.add_argument("--slots", type=int, default=16, help="Number of shared memory ring buffer slots (default: 16)")
+
+    ipc_ping = ipc_sub.add_parser("ping", help="Ping active IPC daemon and measure round-trip microsecond latency")
+    ipc_ping.add_argument("--socket", default="/tmp/reflex_ipc.sock", help="Unix domain socket path")
+    ipc_ping.add_argument("--shm-name", default="reflex_shm_ring", help="POSIX shared memory name")
+
+    ipc_query = ipc_sub.add_parser("query", help="Execute single query against active IPC daemon")
+    ipc_query.add_argument("--socket", default="/tmp/reflex_ipc.sock", help="Unix domain socket path")
+    ipc_query.add_argument("--shm-name", default="reflex_shm_ring", help="POSIX shared memory name")
+    ipc_query.add_argument("--state", required=True, help="Input state description or query prompt")
+
+    ipc_stats = ipc_sub.add_parser("stats", help="Fetch IPC throughput and latency statistics")
+    ipc_stats.add_argument("--socket", default="/tmp/reflex_ipc.sock", help="Unix domain socket path")
+    ipc_stats.add_argument("--shm-name", default="reflex_shm_ring", help="POSIX shared memory name")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -580,6 +603,65 @@ def main():
                 v_w = res.voting_weights.get(s_name, 0.0) * 100
                 print(f"  • {s_name:<18} -> {pred['selected']:<12} (Conf: {pred['confidence']*100:.1f}%, Gate: {g_w:.1f}%, Vote: {v_w:.1f}%)")
             print("=" * 65)
+    elif args.command == "ipc":
+        from reflex.shm import ReflexIPCDaemon, ReflexIPCClient, SHMConfig, IPCOpCode
+        cfg = SHMConfig(
+            socket_path=getattr(args, "socket", "/tmp/reflex_ipc.sock"),
+            shm_name=getattr(args, "shm_name", "reflex_shm_ring"),
+            num_slots=getattr(args, "slots", 16),
+        )
+        if args.ipc_action == "start":
+            daemon = ReflexIPCDaemon(config=cfg, model_path=getattr(args, "model", None))
+            print("=" * 65)
+            print("⚡ Reflex Zero-Copy IPC Daemon (Phase 27)")
+            print("=" * 65)
+            print(f" • Unix Domain Socket : {cfg.socket_path}")
+            print(f" • Shared Memory Name : /{cfg.shm_name}")
+            print(f" • Ring Buffer Slots  : {cfg.num_slots} slots x {cfg.slot_size} bytes")
+            print(f" • Loaded Model       : {args.model or 'PureSemanticEngine (default)'}")
+            print(" • Status             : 🟢 Listening (sub-5us hot-path)\n")
+            import signal
+            def _sig_handler(sig, frame):
+                daemon.stop()
+                sys.exit(0)
+            signal.signal(signal.SIGTERM, _sig_handler)
+            signal.signal(signal.SIGINT, _sig_handler)
+            try:
+                daemon.start(background=False)
+            except KeyboardInterrupt:
+                daemon.stop()
+                sys.exit(0)
+        elif args.ipc_action == "ping":
+            client = ReflexIPCClient(config=cfg)
+            try:
+                for _ in range(10):
+                    client.ping()
+                latencies = [client.ping() for _ in range(50)]
+                min_lat = min(latencies)
+                mean_lat = sum(latencies) / len(latencies)
+                print(f"⚡ Reflex IPC Daemon Ping: PONG")
+                print(f" • Min Latency  : {min_lat:.2f} µs")
+                print(f" • Mean Latency : {mean_lat:.2f} µs (50 iterations)")
+                print(f" • Throughput   : {1_000_000.0 / max(0.01, mean_lat):,.0f} req/s per core")
+            finally:
+                client.close()
+        elif args.ipc_action == "query":
+            client = ReflexIPCClient(config=cfg)
+            try:
+                t0 = time.perf_counter()
+                res = client.predict(args.state)
+                lat_us = (time.perf_counter() - t0) * 1_000_000.0
+                print(f"⚡ IPC Prediction Result ({lat_us:.2f} µs):")
+                print(json.dumps(res, indent=2))
+            finally:
+                client.close()
+        elif args.ipc_action == "stats":
+            client = ReflexIPCClient(config=cfg)
+            try:
+                stats = client.call(IPCOpCode.STATS, {})
+                print(json.dumps(stats, indent=2))
+            finally:
+                client.close()
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))

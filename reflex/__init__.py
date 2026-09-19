@@ -85,6 +85,14 @@ from reflex.ensemble import (
     InstinctEnsemble,
     HierarchicalCascade,
 )
+from reflex.shm import (
+    ReflexIPCDaemon,
+    ReflexIPCClient,
+    SharedMemoryRingBuffer,
+    SHMConfig,
+    SlotState,
+    IPCOpCode,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -165,6 +173,12 @@ __all__ = [
     "EnsembleResult",
     "InstinctEnsemble",
     "HierarchicalCascade",
+    "ReflexIPCDaemon",
+    "ReflexIPCClient",
+    "SharedMemoryRingBuffer",
+    "SHMConfig",
+    "SlotState",
+    "IPCOpCode",
 ]
 
 

@@ -4,6 +4,7 @@ Unified Reflex Client: The Universal System 1 Runtime Interface.
 
 from __future__ import annotations
 import os
+import time
 from typing import Dict, List, Optional, Union
 
 from reflex.primitives import PrimitiveType, Noul, Choice, Score, DecisionResult
@@ -124,6 +125,8 @@ class Reflex:
         else:
             self.cache = None
 
+        self.ipc_client: Optional[Any] = None
+
         if isinstance(backend, BaseBackend):
             self.backend = backend
         elif backend in ("native", "c"):
@@ -141,7 +144,15 @@ class Reflex:
             self.backend = FallbackLLMBackend(api_key=api_key)
         elif backend in ("compiled", "reflex"):
             self.backend = PureSemanticEngine(**backend_kwargs)
+            self.ipc_client = None
+        elif backend == "ipc":
+            from reflex.shm import ReflexIPCClient
+            sock_path = backend_kwargs.pop("socket_path", "/tmp/reflex_ipc.sock")
+            shm_name = backend_kwargs.pop("shm_name", "reflex_shm_ring")
+            self.ipc_client = ReflexIPCClient(socket_path=sock_path, shm_name=shm_name)
+            self.backend = None
         elif backend == "auto":
+            self.ipc_client = None
             # Auto-detection policy
             if self.compiled_instinct is not None:
                 self.backend = PureSemanticEngine(**backend_kwargs)
@@ -204,6 +215,34 @@ class Reflex:
                     with self.tracer.start_span("reflex.evaluate", attributes={"reflex.cached": True, "reflex.backend": cached_res.backend}):
                         pass
                 return cached_res
+
+        if self.ipc_client is not None:
+            t0 = time.perf_counter()
+            decisions = {}
+            for k, q in questions.items():
+                if isinstance(q, Choice):
+                    sel = self.ipc_client.choice(q.instructions, q.options, state)
+                    decisions[k] = q.resolve(sel, {sel: 1.0})
+                elif isinstance(q, Noul):
+                    p = self.ipc_client.noul(q.instructions, state, q.threshold)
+                    decisions[k] = q.resolve(p)
+                elif isinstance(q, Score):
+                    s = self.ipc_client.score(q.instructions, state)
+                    decisions[k] = q.resolve(s)
+                else:
+                    decisions[k] = q.resolve(None)
+            lat_ms = (time.perf_counter() - t0) * 1000.0
+            result = DecisionResult(
+                decisions=decisions,
+                latency_ms=lat_ms,
+                backend="ipc:reflex-shm",
+                input_tokens=len(state.split()),
+                output_tokens=0,
+                cost_usd=0.0,
+            )
+            if self.cache is not None:
+                self.cache.set(state, questions, result)
+            return result
 
         if self.ensemble is not None:
             ens_res = self.ensemble.cascade_predict(state)
