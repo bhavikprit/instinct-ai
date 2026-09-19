@@ -3,13 +3,15 @@ Reflex Command-Line Interface (CLI).
 """
 
 import argparse
-import sys
-from reflex.client import Reflex
-from reflex.primitives import Noul, Choice
+import json
 import os
 import platform
 import shutil
+import sys
 import time
+from reflex.client import Reflex
+from reflex.primitives import Noul, Choice
+
 
 def run_doctor():
     from reflex import __version__
@@ -120,6 +122,31 @@ def main():
         p.add_argument("--no-guardrails", action="store_true", help="Disable pre-flight security guardrails")
         p.add_argument("--mesh-peers", default="", help="Comma-separated URLs of cluster mesh peers")
         p.add_argument("--mesh-secret", default=os.environ.get("REFLEX_MESH_SECRET", ""), help="Cluster HMAC secret for sync")
+        p.add_argument("--canary", action="store_true", help="Enable autonomous canary deployment & decision shadowing")
+        p.add_argument("--canary-traffic", type=float, default=0.0, help="Initial live canary traffic percentage to challenger")
+        p.add_argument("--canary-challenger", default="semantic", help="Challenger backend model (default: semantic)")
+        p.add_argument("--canary-threshold", type=float, default=0.90, help="Minimum agreement threshold for promotion (default: 0.90)")
+        p.add_argument("--canary-auto-promote", action="store_true", help="Enable autonomous progressive canary promotion")
+
+    # Command: canary (Autonomous canary deployment & decision shadowing)
+    canary_parser = subparsers.add_parser("canary", help="Manage and inspect autonomous canary deployments")
+    canary_sub = canary_parser.add_subparsers(dest="canary_action", help="Canary action: stats, promote, rollback, stage")
+
+    canary_stats_p = canary_sub.add_parser("stats", help="Query live canary metrics and agreement statistics")
+    canary_stats_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
+
+    canary_promote_p = canary_sub.add_parser("promote", help="Promote canary challenger to 100%% live traffic")
+    canary_promote_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
+
+    canary_rollback_p = canary_sub.add_parser("rollback", help="Immediately roll back canary traffic to 0%%")
+    canary_rollback_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
+    canary_rollback_p.add_argument("--reason", default="Manual rollback requested via CLI", help="Rollback reason")
+
+    canary_stage_p = canary_sub.add_parser("stage", help="Set explicit canary stage or traffic percentage")
+    canary_stage_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
+    canary_stage_p.add_argument("--stage", choices=["OBSERVATION", "CANARY_10", "CANARY_25", "CANARY_50", "PROMOTED", "ROLLED_BACK"], help="Canary stage name")
+    canary_stage_p.add_argument("--pct", type=float, help="Canary traffic percentage [0.0 - 100.0]")
+
 
     # Command: mesh (Cluster inspection and sync)
     mesh_parser = subparsers.add_parser("mesh", help="Inspect and ping Reflex Instinct Mesh cluster")
@@ -127,6 +154,7 @@ def main():
     peers_p = mesh_sub.add_parser("peers", help="Query active mesh peers")
     peers_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
     peers_p.add_argument("--secret", default=os.environ.get("REFLEX_MESH_SECRET", ""), help="Cluster HMAC secret")
+
 
     # Command: eval (instant reflex evaluation)
     eval_parser = subparsers.add_parser("eval", help="Evaluate a quick System 1 decision")
@@ -222,6 +250,11 @@ def main():
             mesh_enabled=bool(peers_list or secret),
             mesh_peers=peers_list,
             mesh_secret=secret,
+            canary_enabled=getattr(args, "canary", False),
+            canary_traffic_pct=getattr(args, "canary_traffic", 0.0),
+            canary_challenger_backend=getattr(args, "canary_challenger", "semantic"),
+            canary_concordance_threshold=getattr(args, "canary_threshold", 0.90),
+            canary_auto_promote=getattr(args, "canary_auto_promote", False),
         )
         server = ReflexGatewayServer(cfg)
         try:
@@ -230,7 +263,62 @@ def main():
             print("\nShutting down Reflex AI Envoy Gateway...")
             server.stop()
             sys.exit(0)
+    elif args.command == "canary":
+        import urllib.request
+        import urllib.error
+        gateway = getattr(args, "gateway", "http://127.0.0.1:8080").rstrip("/")
+        action = getattr(args, "canary_action", "stats")
+        try:
+            if action == "stats":
+                req = urllib.request.Request(f"{gateway}/v1/canary/stats")
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    print("\n🐤 Reflex Canary Deployment & Shadowing Status:")
+                    print(f" • Rollout Stage        : {data.get('stage', 'unknown')}")
+                    print(f" • Live Canary Traffic  : {data.get('canary_traffic_pct', 0.0):.1f}%")
+                    print(f" • Shadow Traffic Rate  : {data.get('shadow_traffic_pct', 0.0):.1f}%")
+                    print(f" • Total Samples        : {data.get('total_shadowed_samples', 0)}")
+                    print(f" • Concordance Rate     : {data.get('concordance_rate', 0.0):.1%} (Threshold: {data.get('concordance_threshold', 0.0):.1%})")
+                    print(f" • Cohen's Kappa        : {data.get('cohen_kappa', 0.0):.4f} (Min Required: {data.get('min_kappa', 0.0):.2f})")
+                    print(f" • Mean Conf Delta      : {data.get('mean_confidence_delta', 0.0):+.4f}")
+                    lats = data.get("latencies_ms", {})
+                    champ_lat = lats.get("champion", {}).get("p50", 0.0)
+                    chal_lat = lats.get("challenger", {}).get("p50", 0.0)
+                    print(f" • Latency P50 (ms)     : Champion: {champ_lat:.2f}ms | Challenger: {chal_lat:.2f}ms")
+                    incidents = data.get("recent_incidents", [])
+                    if incidents:
+                        print(f" • Recent Incidents ({len(incidents)}):")
+                        for inc in incidents[-3:]:
+                            print(f"   - [{inc.get('type')}] {inc.get('reason') or inc.get('message') or inc.get('error')}")
+                    print()
+            elif action == "promote":
+                req = urllib.request.Request(f"{gateway}/v1/canary/promote", data=b"{}", headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    print(f"🚀 Challenger promoted successfully! Stage: {data.get('stats', {}).get('stage', 'PROMOTED')}")
+            elif action == "rollback":
+                reason = getattr(args, "reason", "Manual rollback requested via CLI")
+                req_data = json.dumps({"reason": reason}).encode("utf-8")
+                req = urllib.request.Request(f"{gateway}/v1/canary/rollback", data=req_data, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    print(f"🛑 Emergency rollback triggered. Stage: {data.get('stats', {}).get('stage', 'ROLLED_BACK')}")
+            elif action == "stage":
+                payload = {}
+                if getattr(args, "stage", None):
+                    payload["stage"] = args.stage
+                if getattr(args, "pct", None) is not None:
+                    payload["canary_pct"] = args.pct
+                req_data = json.dumps(payload).encode("utf-8")
+                req = urllib.request.Request(f"{gateway}/v1/canary/stage", data=req_data, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req, timeout=5.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    stats = data.get("stats", {})
+                    print(f"✅ Canary updated: Stage={stats.get('stage')}, Traffic={stats.get('canary_traffic_pct')}%")
+        except Exception as e:
+            print(f"\n❌ Error querying canary gateway: {e}\n")
     elif args.command == "mesh":
+
         import urllib.request
         gateway = getattr(args, "gateway", "http://127.0.0.1:8080").rstrip("/")
         try:

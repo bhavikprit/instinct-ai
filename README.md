@@ -715,6 +715,57 @@ is_duplicate = PerceptualHasher.hamming_distance(h1, h2) <= 4
 
 ---
 
+## 🐤 Autonomous Canary Deployment & Decision Shadowing (`reflex.shadow`)
+
+Shipping retrained instinct weights, new backend models, or fine-tuned heads directly to 100% of live traffic is hazardous. **`reflex.shadow`** delivers zero-latency asynchronous decision shadowing, real-time Cohen's Kappa agreement tracking, progressive canary traffic splitting, and autonomous safety rollbacks.
+
+```python
+from reflex import Reflex, DecisionShadowRouter, ShadowConfig, ShadowStage, Noul, Choice
+
+# 1. Initialize Dual-Head Router with Production Champion & Candidate Challenger
+champion_rx = Reflex(backend="local")
+challenger_rx = Reflex(backend="semantic")
+
+router = DecisionShadowRouter(
+    champion=champion_rx,
+    challenger=challenger_rx,
+    config=ShadowConfig(
+        stage=ShadowStage.OBSERVATION,      # Starts at 0% live canary; 100% shadow
+        concordance_threshold=0.90,         # Minimum 90% agreement for progression
+        min_kappa=0.70,                     # Minimum Cohen's Kappa (inter-rater agreement)
+        rollback_threshold=0.80,            # Instantly rolls back if agreement < 80%
+        auto_promote=True,                  # Progressively advances: 0% -> 10% -> 50% -> 100%
+        auto_rollback=True                  # Emergency halts candidate on regression
+    )
+)
+
+# 2. Primary evaluation returns synchronously in <1ms; Candidate is shadowed in background
+rx = Reflex(shadow_router=router)
+result = rx.evaluate("User disputes duplicate billing charge", {
+    "category": Choice("Route ticket", options=["billing", "support", "sales"])
+})
+
+# 3. Real-time statistical telemetry
+stats = rx.canary_stats()
+print(f"Stage: {stats['stage']} | Concordance: {stats['concordance_rate'] * 100:.1f}%")
+print(f"Cohen's Kappa (κ): {stats['cohen_kappa']:.4f} | Latency P50: {stats['latencies_ms']['champion']['p50']}ms")
+```
+
+### Gateway & CLI Management:
+```bash
+# Query live canary agreement & Cohen's Kappa across cluster
+reflex canary stats --gateway http://127.0.0.1:8080
+
+# Manually advance canary stage or promote
+reflex canary stage --stage CANARY_50 --gateway http://127.0.0.1:8080
+reflex canary promote --gateway http://127.0.0.1:8080
+
+# Trigger emergency rollback
+reflex canary rollback --gateway http://127.0.0.1:8080
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
@@ -809,6 +860,15 @@ is_duplicate = PerceptualHasher.hamming_distance(h1, h2) <= 4
    - [x] Typed visual decision primitives (`rx.visual_choice`, `rx.visual_noul`) with sub-millisecond execution
    - [x] Multimodal base64 image deduplication in AI Envoy Gateway saving 100% downstream vision tokens
    - [x] End-to-end demonstration (`examples/20_multimodal_visual_decisions.py`) and 149-test verification
+ - [x] **Phase 21: Autonomous Canary Deployment & Decision Shadowing (`reflex.shadow`)**
+   - [x] Zero-latency asynchronous shadowing of candidate decision heads in background worker threads
+   - [x] Real-time statistical inter-rater agreement tracking (Concordance Rate, Cohen's Kappa $\kappa$, Confusion Matrix)
+   - [x] Dynamic canary traffic splitting (0% -> 10% -> 25% -> 50% -> 100%)
+   - [x] Autonomous auto-promotion upon sustained statistical agreement
+   - [x] Autonomous instant safety rollback upon divergence or error spikes
+   - [x] AI Envoy Gateway REST endpoints (`/v1/canary/stats`, `/v1/canary/promote`, `/v1/canary/rollback`) and CLI tooling
+   - [x] End-to-end demonstration (`examples/21_decision_shadowing_and_canary.py`) and 161-test verification
+
 
 ---
 

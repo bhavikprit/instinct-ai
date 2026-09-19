@@ -26,6 +26,7 @@ from reflex.embeddings import SemanticVectorEncoder, cosine_similarity
 from reflex.guardrails import GuardrailSuite
 from reflex.primitives import Noul, Choice
 from reflex.mesh import InstinctMeshNode, MeshConfig
+from reflex.shadow import DecisionShadowRouter, ShadowConfig, ShadowStage
 
 
 @dataclass
@@ -46,6 +47,14 @@ class GatewayConfig:
     mesh_peers: List[str] = field(default_factory=list)
     mesh_secret: Optional[str] = os.environ.get("REFLEX_MESH_SECRET", None)
     mesh_node_id: Optional[str] = None
+    canary_enabled: bool = False
+    canary_traffic_pct: float = 0.0
+    canary_challenger_backend: str = "semantic"
+    canary_concordance_threshold: float = 0.90
+    canary_auto_promote: bool = False
+    canary_auto_rollback: bool = True
+    canary_shadow_traffic_pct: float = 100.0
+
 
 
 @dataclass
@@ -227,6 +236,7 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
     guardrails: GuardrailSuite = GuardrailSuite()
     rx: Reflex = Reflex()
     mesh_node: Optional[InstinctMeshNode] = None
+    shadow_router: Optional[DecisionShadowRouter] = None
 
     @classmethod
     def initialize(cls, config: GatewayConfig):
@@ -255,12 +265,35 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         else:
             cls.mesh_node = None
 
+        if config.canary_enabled:
+            champ_rx = cls.rx
+            chal_rx = Reflex(backend=config.canary_challenger_backend)
+            shadow_cfg = ShadowConfig(
+                canary_traffic_pct=config.canary_traffic_pct,
+                shadow_traffic_pct=config.canary_shadow_traffic_pct,
+                concordance_threshold=config.canary_concordance_threshold,
+                auto_promote=config.canary_auto_promote,
+                auto_rollback=config.canary_auto_rollback,
+            )
+            cls.shadow_router = DecisionShadowRouter(
+                champion=champ_rx,
+                challenger=chal_rx,
+                config=shadow_cfg,
+            )
+        else:
+            cls.shadow_router = None
+
     def do_GET(self):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/healthz", "/health"):
             self._send_json(200, {"status": "healthy", "service": "reflex-gateway", "version": "0.2.0"})
         elif norm_path in ("/v1/gateway/stats", "/stats"):
             self._send_json(200, self.metrics.to_dict())
+        elif norm_path in ("/v1/canary/stats", "/canary/stats"):
+            if self.shadow_router is not None:
+                self._send_json(200, self.shadow_router.stats())
+            else:
+                self._send_json(400, {"error": "Canary/Shadowing is not enabled on this gateway"})
         elif norm_path in ("/v1/mesh/peers", "/mesh/peers"):
             if self.mesh_node is not None:
                 status, res = self.mesh_node.handle_peers_request()
@@ -283,7 +316,36 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/v1/chat/completions", "/chat/completions"):
             self.handle_chat_completions()
+        elif norm_path in ("/v1/canary/stage", "/canary/stage"):
+            if self.shadow_router is not None:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+                data = json.loads(body) if body else {}
+                if "stage" in data:
+                    self.shadow_router.set_stage(data["stage"])
+                elif "canary_pct" in data:
+                    self.shadow_router.set_canary_pct(float(data["canary_pct"]))
+                self._send_json(200, {"status": "ok", "stats": self.shadow_router.stats()})
+            else:
+                self._send_json(400, {"error": "Canary/Shadowing is not enabled on this gateway"})
+        elif norm_path in ("/v1/canary/promote", "/canary/promote"):
+            if self.shadow_router is not None:
+                self.shadow_router.promote()
+                self._send_json(200, {"status": "promoted", "stats": self.shadow_router.stats()})
+            else:
+                self._send_json(400, {"error": "Canary/Shadowing is not enabled on this gateway"})
+        elif norm_path in ("/v1/canary/rollback", "/canary/rollback"):
+            if self.shadow_router is not None:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+                data = json.loads(body) if body else {}
+                reason = data.get("reason", "Manual rollback via API")
+                self.shadow_router.rollback(reason=reason)
+                self._send_json(200, {"status": "rolled_back", "stats": self.shadow_router.stats()})
+            else:
+                self._send_json(400, {"error": "Canary/Shadowing is not enabled on this gateway"})
         elif norm_path in ("/v1/mesh/sync", "/mesh/sync"):
+
             if self.mesh_node is not None:
                 content_len = int(self.headers.get("Content-Length", 0))
                 body_bytes = self.rfile.read(content_len)
@@ -413,11 +475,18 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
             if self.cache is not None:
                 self.cache.set(combined_prompt, res_payload, model=model)
 
-            self._send_json(200, res_payload, extra_headers={
+            extra_headers = {
                 "X-Reflex-Cache": "SHORTCIRCUIT-SYSTEM1",
                 "X-Reflex-Latency-Ms": f"{latency_ms:.2f}",
                 "X-Reflex-Cost-Saved-USD": f"{self.config.estimated_upstream_cost_usd:.4f}",
-            })
+            }
+            if self.shadow_router is not None:
+                extra_headers["X-Reflex-Canary-Stage"] = self.shadow_router.config.stage.value
+                extra_headers["X-Reflex-Shadowed"] = "TRUE"
+                is_chal = (self.shadow_router.config.stage == ShadowStage.PROMOTED or self.shadow_router.config.canary_traffic_pct >= 50.0)
+                extra_headers["X-Reflex-Decision-Head"] = "challenger" if is_chal else "champion"
+
+            self._send_json(200, res_payload, extra_headers=extra_headers)
             return
 
         # -------------------------------------------------------------
@@ -438,19 +507,21 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
 
     def _fulfill_system1(self, req_json: dict, prompt: str) -> dict:
         """Resolve a structured decision request locally in <15ms with $0 cost."""
-        eval_res = self.rx.evaluate(
-            state=prompt,
-            questions={
-                "is_urgent": Noul("Is this message urgent or high priority?"),
-                "category": Choice("Select category", options=["support", "billing", "security", "general"]),
-            }
-        )
+        questions = {
+            "is_urgent": Noul("Is this message urgent or high priority?"),
+            "category": Choice("Select category", options=["support", "billing", "security", "general"]),
+        }
+        if self.shadow_router is not None:
+            eval_res = self.shadow_router.evaluate(state=prompt, questions=questions)
+        else:
+            eval_res = self.rx.evaluate(state=prompt, questions=questions)
 
         content_dict = {
             "is_urgent": eval_res["is_urgent"].is_true,
             "confidence": round(eval_res["is_urgent"].confidence, 3),
             "category": eval_res["category"].selected,
         }
+
 
         return {
             "id": f"chatcmpl-reflex-{int(time.time() * 1000)}",
@@ -578,6 +649,10 @@ class ReflexGatewayServer:
     def metrics(self) -> GatewayMetrics:
         return self.handler_class.metrics
 
+    @property
+    def shadow_router(self) -> Optional[DecisionShadowRouter]:
+        return self.handler_class.shadow_router
+
     def start(self, background: bool = False):
         """Start the gateway server."""
         self.handler_class.initialize(self.config)
@@ -596,6 +671,8 @@ class ReflexGatewayServer:
             print(f"   • Pre-flight Shield: {'Active (sub-1ms)' if self.config.guardrails_enabled else 'Disabled'}")
             if self.handler_class.mesh_node is not None:
                 print(f"   • Instinct Mesh    : Connected ({len(self.config.mesh_peers)} peers)")
+            if self.handler_class.shadow_router is not None:
+                print(f"   • Canary/Shadow    : Active (Stage: {self.handler_class.shadow_router.config.stage.value})")
             try:
                 self.server.serve_forever()
             except KeyboardInterrupt:
@@ -605,6 +682,8 @@ class ReflexGatewayServer:
         """Stop the gateway server."""
         if self.handler_class.mesh_node is not None:
             self.handler_class.mesh_node.stop()
+        if self.handler_class.shadow_router is not None:
+            self.handler_class.shadow_router.shutdown(wait=False)
         if self.server is not None:
             self.server.shutdown()
             self.server.server_close()
@@ -612,3 +691,4 @@ class ReflexGatewayServer:
         if self.thread is not None and self.thread.is_alive():
             self.thread.join(timeout=2.0)
             self.thread = None
+

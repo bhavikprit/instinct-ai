@@ -46,6 +46,13 @@ from reflex.flow import (
     MaxStepsExceededError,
     InvalidTransitionError,
 )
+from reflex.shadow import (
+    ShadowStage,
+    ShadowConfig,
+    ShadowEvaluationRecord,
+    DivergenceTracker,
+    DecisionShadowRouter,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -97,5 +104,11 @@ __all__ = [
     "FlowError",
     "MaxStepsExceededError",
     "InvalidTransitionError",
+    "ShadowStage",
+    "ShadowConfig",
+    "ShadowEvaluationRecord",
+    "DivergenceTracker",
+    "DecisionShadowRouter",
 ]
+
 

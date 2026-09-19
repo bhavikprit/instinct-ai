@@ -18,6 +18,7 @@ from reflex.telemetry import OpenTelemetryTracer
 from reflex.learning import SelfTuningInstinctHead
 from reflex.feedback import FeedbackCollector
 from reflex.mesh import InstinctMeshNode, MeshConfig
+from reflex.shadow import DecisionShadowRouter, ShadowConfig, ShadowStage
 
 
 class Reflex:
@@ -49,6 +50,9 @@ class Reflex:
         mesh_secret: Optional[str] = None,
         mesh_config: Optional[MeshConfig] = None,
         mesh_node: Optional[InstinctMeshNode] = None,
+        shadow_router: Optional[DecisionShadowRouter] = None,
+        shadow_challenger: Optional[Union[Reflex, BaseBackend, str]] = None,
+        shadow_config: Optional[ShadowConfig] = None,
         **backend_kwargs,
     ):
         self.policy = policy
@@ -113,8 +117,26 @@ class Reflex:
         else:
             raise ValueError(f"Unknown backend '{backend}'")
 
-    def evaluate(self, state: str, questions: Dict[str, PrimitiveType]) -> DecisionResult:
-        """Evaluates typed questions against state in a single pass."""
+        # Shadowing & Canary setup (Phase 21)
+        if shadow_router is not None:
+            self.shadow_router: Optional[DecisionShadowRouter] = shadow_router
+        elif shadow_challenger is not None:
+            if isinstance(shadow_challenger, str):
+                challenger_inst = Reflex(backend=shadow_challenger)
+            elif isinstance(shadow_challenger, BaseBackend):
+                challenger_inst = Reflex(backend=shadow_challenger)
+            else:
+                challenger_inst = shadow_challenger
+            self.shadow_router = DecisionShadowRouter(
+                champion=self,
+                challenger=challenger_inst,
+                config=shadow_config or ShadowConfig(),
+            )
+        else:
+            self.shadow_router = None
+
+    def _evaluate_direct(self, state: str, questions: Dict[str, PrimitiveType]) -> DecisionResult:
+        """Internal direct evaluation bypassing shadow router (used by champion/challenger)."""
         if self.cache is not None:
             cached_res = self.cache.get(state, questions)
             if cached_res is not None:
@@ -147,6 +169,25 @@ class Reflex:
             self.cache.set(state, questions, result)
 
         return result
+
+    def evaluate(
+        self,
+        state: str,
+        questions: Dict[str, PrimitiveType],
+        client_key: Optional[str] = None,
+        shadow: bool = True,
+    ) -> DecisionResult:
+        """Evaluates typed questions against state in a single pass."""
+        if self.shadow_router is not None and shadow:
+            return self.shadow_router.evaluate(state, questions, client_key=client_key)
+        return self._evaluate_direct(state, questions)
+
+    def canary_stats(self) -> Optional[Dict[str, Any]]:
+        """Returns real-time canary agreement and traffic stats if shadowing is active."""
+        if self.shadow_router is not None:
+            return self.shadow_router.stats()
+        return None
+
 
     def teach(
         self,
