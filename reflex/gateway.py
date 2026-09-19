@@ -19,11 +19,13 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any, Dict, List, Optional, Tuple
 import urllib.request
 import urllib.error
+import uuid
 
 from reflex.client import Reflex
 from reflex.embeddings import SemanticVectorEncoder, cosine_similarity
 from reflex.guardrails import GuardrailSuite
 from reflex.primitives import Noul, Choice
+from reflex.mesh import InstinctMeshNode, MeshConfig
 
 
 @dataclass
@@ -40,6 +42,10 @@ class GatewayConfig:
     system1_routing_enabled: bool = True
     estimated_upstream_latency_ms: float = 1850.0
     estimated_upstream_cost_usd: float = 0.005
+    mesh_enabled: bool = False
+    mesh_peers: List[str] = field(default_factory=list)
+    mesh_secret: Optional[str] = os.environ.get("REFLEX_MESH_SECRET", None)
+    mesh_node_id: Optional[str] = None
 
 
 @dataclass
@@ -220,13 +226,14 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
     cache: Optional[GatewaySemanticCache] = None
     guardrails: GuardrailSuite = GuardrailSuite()
     rx: Reflex = Reflex()
+    mesh_node: Optional[InstinctMeshNode] = None
 
     @classmethod
     def initialize(cls, config: GatewayConfig):
         cls.config = config
         cls.metrics = GatewayMetrics()
         cls.guardrails = GuardrailSuite()
-        cls.rx = Reflex()
+        cls.rx = Reflex(learning=True)
         if config.cache_enabled:
             cls.cache = GatewaySemanticCache(
                 max_size=2000,
@@ -236,12 +243,30 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         else:
             cls.cache = None
 
+        if config.mesh_enabled or config.mesh_peers:
+            mesh_cfg = MeshConfig(
+                node_id=config.mesh_node_id or f"gateway-{uuid.uuid4().hex[:8]}",
+                host=config.host,
+                port=config.port,
+                peers=config.mesh_peers,
+                cluster_secret=config.mesh_secret,
+            )
+            cls.mesh_node = InstinctMeshNode(config=mesh_cfg, instinct_head=cls.rx.instinct_head)
+        else:
+            cls.mesh_node = None
+
     def do_GET(self):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/healthz", "/health"):
             self._send_json(200, {"status": "healthy", "service": "reflex-gateway", "version": "0.2.0"})
         elif norm_path in ("/v1/gateway/stats", "/stats"):
             self._send_json(200, self.metrics.to_dict())
+        elif norm_path in ("/v1/mesh/peers", "/mesh/peers"):
+            if self.mesh_node is not None:
+                status, res = self.mesh_node.handle_peers_request()
+                self._send_json(status, res)
+            else:
+                self._send_json(400, {"error": "Instinct Mesh is not enabled on this gateway"})
         elif norm_path in ("/v1/models", "/models"):
             self._send_json(200, {
                 "object": "list",
@@ -258,6 +283,22 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/v1/chat/completions", "/chat/completions"):
             self.handle_chat_completions()
+        elif norm_path in ("/v1/mesh/sync", "/mesh/sync"):
+            if self.mesh_node is not None:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body_bytes = self.rfile.read(content_len)
+                status, res = self.mesh_node.handle_sync_request(body_bytes, dict(self.headers))
+                self._send_json(status, res)
+            else:
+                self._send_json(400, {"error": "Instinct Mesh is not enabled on this gateway"})
+        elif norm_path in ("/v1/mesh/heartbeat", "/mesh/heartbeat"):
+            if self.mesh_node is not None:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body_bytes = self.rfile.read(content_len)
+                status, res = self.mesh_node.handle_heartbeat_request(body_bytes, dict(self.headers))
+                self._send_json(status, res)
+            else:
+                self._send_json(400, {"error": "Instinct Mesh is not enabled on this gateway"})
         else:
             self.send_error(404, f"Endpoint '{self.path}' not supported by Reflex Gateway")
 
@@ -500,11 +541,32 @@ class ReflexGatewayServer:
         self.server: Optional[ThreadingHTTPServer] = None
         self.thread: Optional[threading.Thread] = None
 
+        # Dynamically create an isolated handler subclass per server instance
+        class IsolatedGatewayHandler(GatewayRequestHandler):
+            config = self.config
+
+        self.handler_class = IsolatedGatewayHandler
+
+    @property
+    def mesh_node(self) -> Optional[InstinctMeshNode]:
+        return self.handler_class.mesh_node
+
+    @property
+    def rx(self) -> Reflex:
+        return self.handler_class.rx
+
+    @property
+    def metrics(self) -> GatewayMetrics:
+        return self.handler_class.metrics
+
     def start(self, background: bool = False):
         """Start the gateway server."""
-        GatewayRequestHandler.initialize(self.config)
-        self.server = ThreadingHTTPServer((self.config.host, self.config.port), GatewayRequestHandler)
+        self.handler_class.initialize(self.config)
+        self.server = ThreadingHTTPServer((self.config.host, self.config.port), self.handler_class)
         
+        if self.handler_class.mesh_node is not None:
+            self.handler_class.mesh_node.start_background_gossip()
+
         if background:
             self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
             self.thread.start()
@@ -513,6 +575,8 @@ class ReflexGatewayServer:
             print(f"   • Upstream Provider: {self.config.upstream_url}")
             print(f"   • Semantic Cache   : {'Enabled (TTL: ' + str(self.config.cache_ttl) + 's)' if self.config.cache_enabled else 'Disabled'}")
             print(f"   • Pre-flight Shield: {'Active (sub-1ms)' if self.config.guardrails_enabled else 'Disabled'}")
+            if self.handler_class.mesh_node is not None:
+                print(f"   • Instinct Mesh    : Connected ({len(self.config.mesh_peers)} peers)")
             try:
                 self.server.serve_forever()
             except KeyboardInterrupt:
@@ -520,6 +584,8 @@ class ReflexGatewayServer:
 
     def stop(self):
         """Stop the gateway server."""
+        if self.handler_class.mesh_node is not None:
+            self.handler_class.mesh_node.stop()
         if self.server is not None:
             self.server.shutdown()
             self.server.server_close()

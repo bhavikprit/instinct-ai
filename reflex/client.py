@@ -17,6 +17,7 @@ from reflex.cache import InstinctCache
 from reflex.telemetry import OpenTelemetryTracer
 from reflex.learning import SelfTuningInstinctHead
 from reflex.feedback import FeedbackCollector
+from reflex.mesh import InstinctMeshNode, MeshConfig
 
 
 class Reflex:
@@ -43,6 +44,11 @@ class Reflex:
         learning: bool = False,
         instinct_head: Optional[SelfTuningInstinctHead] = None,
         feedback: Optional[FeedbackCollector] = None,
+        mesh: bool = False,
+        mesh_peers: Optional[List[str]] = None,
+        mesh_secret: Optional[str] = None,
+        mesh_config: Optional[MeshConfig] = None,
+        mesh_node: Optional[InstinctMeshNode] = None,
         **backend_kwargs,
     ):
         self.policy = policy
@@ -51,11 +57,27 @@ class Reflex:
         self.tracer = tracer
 
         # Active Learning & Feedback setup
-        if instinct_head is not None or learning:
-            self.instinct_head = instinct_head or SelfTuningInstinctHead()
+        if instinct_head is not None:
+            self.instinct_head = instinct_head
+        elif mesh_node is not None:
+            self.instinct_head = mesh_node.head
+        elif learning or mesh or mesh_peers or mesh_config or mesh_secret:
+            self.instinct_head = SelfTuningInstinctHead()
         else:
             self.instinct_head = None
         self.feedback = feedback or FeedbackCollector()
+
+        # Instinct Mesh setup (Phase 19)
+        if mesh_node is not None:
+            self.mesh_node: Optional[InstinctMeshNode] = mesh_node
+        elif mesh or mesh_peers or mesh_config or mesh_secret:
+            cfg = mesh_config or MeshConfig(
+                peers=mesh_peers or [],
+                cluster_secret=mesh_secret,
+            )
+            self.mesh_node = InstinctMeshNode(config=cfg, instinct_head=self.instinct_head)
+        else:
+            self.mesh_node = None
 
         # Cache setup
         if isinstance(cache, InstinctCache):
@@ -151,12 +173,25 @@ class Reflex:
 
         if isinstance(ground_truth, bool):
             target_val = 1.0 if ground_truth else 0.0
-            return self.instinct_head.update_binary(state, target_val, question_key=question_key, lr=lr)
+            loss = self.instinct_head.update_binary(state, target_val, question_key=question_key, lr=lr)
         elif isinstance(ground_truth, str):
             opts = options or [ground_truth]
-            return self.instinct_head.update_choice(state, target_option=ground_truth, options=opts, prefix=question_key, lr=lr)
+            loss = self.instinct_head.update_choice(state, target_option=ground_truth, options=opts, prefix=question_key, lr=lr)
         else:
-            return self.instinct_head.update_binary(state, float(ground_truth), question_key=question_key, lr=lr)
+            loss = self.instinct_head.update_binary(state, float(ground_truth), question_key=question_key, lr=lr)
+
+        # Broadcast learned delta across Instinct Mesh (Phase 19)
+        if self.mesh_node is not None:
+            self.mesh_node.broadcast_teach_update(sample_delta=1, asynchronous=True)
+
+        return loss
+
+    def sync_fleet(self) -> Dict[str, Any]:
+        """Pings all fleet peers and returns cluster connectivity metrics."""
+        if self.mesh_node is None:
+            return {"error": "Mesh not enabled on this Reflex client"}
+        self.mesh_node.ping_peers()
+        return self.mesh_node.handle_peers_request()[1]
 
     def noul(self, instructions: str, state: str, threshold: float = 0.85) -> float:
         """Direct shortcut returning calibrated probability float [0.0 - 1.0]."""

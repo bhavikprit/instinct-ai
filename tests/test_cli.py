@@ -52,6 +52,16 @@ class TestCLI(unittest.TestCase):
         out = f.getvalue()
         self.assertIn("--upstream", out)
         self.assertIn("--cache-ttl", out)
+        self.assertIn("--mesh-peers", out)
+
+    def test_cli_mesh_parser(self):
+        f = io.StringIO()
+        with patch("sys.stdout", f), patch.object(sys, "argv", ["reflex", "mesh", "--help"]):
+            with self.assertRaises(SystemExit) as cm:
+                main()
+            self.assertEqual(cm.exception.code, 0)
+        out = f.getvalue()
+        self.assertIn("peers", out)
 
 
 if __name__ == "__main__":

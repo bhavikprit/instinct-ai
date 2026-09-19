@@ -118,6 +118,15 @@ def main():
         p.add_argument("--similarity-threshold", type=float, default=0.95, help="Cosine threshold for L2 semantic cache (default: 0.95)")
         p.add_argument("--no-cache", action="store_true", help="Disable semantic deduplication cache")
         p.add_argument("--no-guardrails", action="store_true", help="Disable pre-flight security guardrails")
+        p.add_argument("--mesh-peers", default="", help="Comma-separated URLs of cluster mesh peers")
+        p.add_argument("--mesh-secret", default=os.environ.get("REFLEX_MESH_SECRET", ""), help="Cluster HMAC secret for sync")
+
+    # Command: mesh (Cluster inspection and sync)
+    mesh_parser = subparsers.add_parser("mesh", help="Inspect and ping Reflex Instinct Mesh cluster")
+    mesh_sub = mesh_parser.add_subparsers(dest="mesh_action", help="Mesh action: peers")
+    peers_p = mesh_sub.add_parser("peers", help="Query active mesh peers")
+    peers_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
+    peers_p.add_argument("--secret", default=os.environ.get("REFLEX_MESH_SECRET", ""), help="Cluster HMAC secret")
 
     # Command: eval (instant reflex evaluation)
     eval_parser = subparsers.add_parser("eval", help="Evaluate a quick System 1 decision")
@@ -200,6 +209,8 @@ def main():
         start_repl(initial_backend=args.backend)
     elif args.command in ("serve", "gateway"):
         from reflex.gateway import ReflexGatewayServer, GatewayConfig
+        peers_list = [p.strip() for p in getattr(args, "mesh_peers", "").split(",") if p.strip()]
+        secret = getattr(args, "mesh_secret", "") or None
         cfg = GatewayConfig(
             host=args.host,
             port=args.port,
@@ -208,6 +219,9 @@ def main():
             cache_ttl=getattr(args, "cache_ttl", 3600.0),
             semantic_threshold=getattr(args, "similarity_threshold", 0.95),
             guardrails_enabled=not getattr(args, "no_guardrails", False),
+            mesh_enabled=bool(peers_list or secret),
+            mesh_peers=peers_list,
+            mesh_secret=secret,
         )
         server = ReflexGatewayServer(cfg)
         try:
@@ -216,6 +230,22 @@ def main():
             print("\nShutting down Reflex AI Envoy Gateway...")
             server.stop()
             sys.exit(0)
+    elif args.command == "mesh":
+        import urllib.request
+        gateway = getattr(args, "gateway", "http://127.0.0.1:8080").rstrip("/")
+        try:
+            req = urllib.request.Request(f"{gateway}/v1/mesh/peers")
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                print("\n🌐 Reflex Instinct Mesh Cluster Status:")
+                print(f" • Node ID    : {data.get('node_id', 'unknown')}")
+                print(f" • Generation : {data.get('generation', 0)}")
+                print(f" • Peers ({len(data.get('peers', []))}):")
+                for peer in data.get("peers", []):
+                    print(f"   - {peer.get('address')}: {peer.get('status', 'unknown')} (latency: {peer.get('last_latency_ms', 0):.1f}ms, gen: {peer.get('generation', 0)})")
+                print()
+        except Exception as e:
+            print(f"\n❌ Error querying mesh gateway: {e}\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))

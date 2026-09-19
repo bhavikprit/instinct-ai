@@ -651,6 +651,42 @@ print(flow.to_mermaid())  # Exports Mermaid flowchart diagram
 
 ---
 
+## 🌐 Distributed Fleet Sync & Instinct Mesh (`reflex.mesh`)
+
+In high-throughput multi-pod agent clusters, when one pod discovers a novel pattern or edge-case via active learning (`rx.teach(...)`), **Instinct Mesh (`reflex.mesh`)** propagates learned weights and decision boundaries to all cluster peers in **2–4ms** without Redis, Postgres, or external coordinators.
+
+```python
+from reflex import Reflex, ReflexGatewayServer, GatewayConfig
+
+# 1. Start gateway with peer mesh topology
+config = GatewayConfig(
+    port=8080,
+    mesh_enabled=True,
+    mesh_peers=["http://pod-2:8080", "http://pod-3:8080"],
+    mesh_secret="cluster-hmac-secret-token"
+)
+server = ReflexGatewayServer(config)
+server.start(background=True)
+
+# 2. Attach client to mesh node
+rx = Reflex(learning=True, mesh_node=server.mesh_node)
+
+# 3. Online Active Learning automatically broadcasts signed deltas across the cluster:
+rx.teach(
+    state="Customer request: emergency account suspension after physical robbery",
+    question_key="is_emergency",
+    ground_truth=True
+)
+# Pods 2 and 3 merge the weights proportionally via federated sample volume ($W = \frac{n_1 W_1 + n_2 W_2}{n_1 + n_2}$)
+```
+
+Inspect cluster topology from the CLI:
+```bash
+reflex mesh peers --gateway http://127.0.0.1:8080
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
@@ -733,6 +769,12 @@ print(flow.to_mermaid())  # Exports Mermaid flowchart diagram
    - [x] High-throughput `ReflexGatewayServer` & `ThreadingHTTPServer` with connection pooling
    - [x] Real-time financial ROI, token savings, and latency telemetry (`GET /v1/gateway/stats`)
    - [x] Production CLI flags (`reflex gateway --cache-ttl 3600 --similarity-threshold 0.95`)
+ - [x] **Phase 19: Distributed Fleet Sync & Instinct Mesh (`reflex.mesh`)**
+   - [x] Peer-to-peer active learning synchronization across distributed multi-pod clusters
+   - [x] Cryptographic HMAC-SHA256 signature verification and anti-replay protection
+   - [x] Conflict-free federated weight blending ($W = \frac{n_1 W_1 + n_2 W_2}{n_1 + n_2}$)
+   - [x] REST endpoints (`/v1/mesh/sync`, `/v1/mesh/peers`, `/v1/mesh/heartbeat`) and CLI tooling (`reflex mesh peers`)
+   - [x] Multi-pod cluster live simulation (`examples/19_distributed_fleet_mesh_sync.py`)
 
 ---
 

@@ -27,6 +27,7 @@ from reflex.learning import SelfTuningInstinctHead, OnlineTuner
 from reflex.backends.c_engine import NativeCEngine
 from reflex.proxy import start_proxy
 from reflex.gateway import ReflexGatewayServer, GatewayConfig, GatewayMetrics
+from reflex.mesh import InstinctMeshNode, MeshConfig, MeshPeerState
 from reflex.flow import (
     StateGraph,
     Flow,
@@ -72,6 +73,9 @@ __all__ = [
     "ReflexGatewayServer",
     "GatewayConfig",
     "GatewayMetrics",
+    "InstinctMeshNode",
+    "MeshConfig",
+    "MeshPeerState",
     "StateGraph",
     "Flow",
     "START",
