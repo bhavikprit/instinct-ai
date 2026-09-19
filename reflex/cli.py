@@ -448,6 +448,17 @@ def main():
     reject_bench.add_argument("--samples", type=int, default=500, help="Number of calibration samples (default: 500)")
     reject_bench.add_argument("--target-risk", type=float, default=0.02, help="Target risk budget (default: 0.02 for <=2%% error)")
 
+    # Command: cascade (Cost-Aware Dual-Brain Cascades & Risk-Budgeted Routing - Phase 40)
+    cascade_parser = subparsers.add_parser("cascade", help="Inspect and benchmark cost-aware model cascades with risk budgets")
+    cascade_sub = cascade_parser.add_subparsers(dest="cascade_action", required=True)
+
+    cascade_info = cascade_sub.add_parser("info", help="Inspect .reflex-cascade model hierarchy and thresholds")
+    cascade_info.add_argument("path", help="Path to .reflex-cascade file")
+
+    cascade_bench = cascade_sub.add_parser("benchmark", help="Benchmark multi-tier cascade Pareto cost-risk frontier")
+    cascade_bench.add_argument("--samples", type=int, default=500, help="Number of calibration samples (default: 500)")
+    cascade_bench.add_argument("--target-risk", type=float, default=0.02, help="Target error SLA budget (default: 0.02 for <=2%% error)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -1734,6 +1745,108 @@ def main():
                 verdict = "✅ ACCEPT" if accepted else "❌ REJECT"
                 action = "Autonomous System-1" if accepted else "Escalate to System-2"
                 print(f" {conf_val:<14.2f} {sc.threshold:<12.4f} {verdict:<20} {sc.calibrated_upper_risk * 100:<17.2f}% {action}")
+            print("=" * 65 + "\n")
+    elif args.command == "cascade":
+        from reflex.cascade import CascadeConfig, CascadeRouter, CascadeTier
+        if args.cascade_action == "info":
+            try:
+                router = CascadeRouter.load(args.path)
+                print("\n" + "=" * 65)
+                print("⚡ Reflex Cost-Aware Model Cascade (.reflex-cascade)")
+                print("=" * 65)
+                print(f" • Calibration Samples   : {router.num_calibration_samples}")
+                print(f" • Configured Tiers      : {router.num_tiers}")
+                for t in router.tiers:
+                    print(f"   [{t.tier_index}] {t.name:<20} : ${t.cost_per_query:.4f}/query, ~{t.expected_latency_ms:.1f}ms ({t.description})")
+                if router.config.target_risk is not None:
+                    print(f" • Target Risk Budget    : <= {router.config.target_risk * 100:.2f}%")
+                if router.config.target_quality is not None:
+                    print(f" • Target Quality SLA    : >= {router.config.target_quality * 100:.2f}%")
+                print(f" • Optimal Thresholds θ* : {[round(x, 4) for x in router.thresholds]}")
+                print(f" • Expected Blended Cost : ${router.calibrated_cost:.6f} / query")
+                terminal_cost = router.tiers[-1].cost_per_query
+                savings = max(0.0, (1.0 - (router.calibrated_cost / terminal_cost)) * 100.0) if terminal_cost > 0.0 else 0.0
+                print(f" • Cost Savings vs Term  : {savings:.2f}% (Terminal: ${terminal_cost:.4f})")
+                print(f" • Blended Empirical Risk: {router.calibrated_empirical_risk * 100:.2f}%")
+                print(f" • Guaranteed Upper Risk : {router.calibrated_upper_risk * 100:.2f}% (95% CI)")
+                print(f" • Status                : {'✅ Calibrated' if router.is_calibrated else '⚠️ Warm-up needed'}\n")
+
+                print(" Traffic Distribution Across Tiers:")
+                for tier_name, share in router.calibrated_tier_shares.items():
+                    bar = "█" * int(share * 25)
+                    print(f"   {tier_name:<20} : {share * 100:5.1f}% |{bar:<25}|")
+
+                print("\n Pareto Cost-Risk Trade-Off Frontier Preview:")
+                print(router.ascii_cost_risk_frontier(num_points=8))
+                print("=" * 65 + "\n")
+            except Exception as e:
+                print(f"❌ Error inspecting cascade model: {e}")
+                sys.exit(1)
+        elif args.cascade_action == "benchmark":
+            import random
+            print("\n" + "=" * 65)
+            print("🚀 Reflex Cost-Aware Model Cascade Benchmark")
+            print("=" * 65)
+            rng = random.Random(42)
+            tiers = [
+                CascadeTier(name="system1_instinct", cost_per_query=0.0, expected_latency_ms=0.05, tier_index=0, description="Reflex Sub-Millisecond Instinct"),
+                CascadeTier(name="fast_slm", cost_per_query=0.0005, expected_latency_ms=45.0, tier_index=1, description="Fast Edge SLM API"),
+                CascadeTier(name="frontier_llm", cost_per_query=0.0300, expected_latency_ms=1200.0, tier_index=2, description="Frontier Heavy Reasoning Model"),
+            ]
+            cfg = CascadeConfig(target_risk=args.target_risk, min_calibration_samples=30)
+            router = CascadeRouter(tiers=tiers, config=cfg)
+
+            # Generate synthetic calibration stream across difficulty spectrum
+            for _ in range(args.samples):
+                diff = rng.random()
+                s0 = max(0.05, min(0.99, 1.0 - 0.85 * diff + rng.gauss(0, 0.08)))
+                e0 = 1 if rng.random() < max(0.01, 1.5 * (1.0 - s0) ** 1.5) else 0
+
+                s1 = max(0.15, min(0.99, 1.0 - 0.50 * diff + rng.gauss(0, 0.06)))
+                e1 = 1 if rng.random() < max(0.005, 1.0 * (1.0 - s1) ** 1.8) else 0
+
+                s2 = 0.99
+                e2 = 1 if rng.random() < 0.008 else 0
+
+                router.add_sample({0: s0, 1: s1, 2: s2}, {0: e0, 1: e1, 2: e2})
+
+            router.calibrate()
+            terminal_cost = tiers[-1].cost_per_query
+            savings = max(0.0, (1.0 - (router.calibrated_cost / terminal_cost)) * 100.0)
+
+            print(f" • Calibration Samples   : {router.num_calibration_samples}")
+            print(f" • Target Risk SLA       : <= {args.target_risk * 100:.2f}%")
+            print(f" • Optimal Thresholds θ* : {[round(x, 4) for x in router.thresholds]}")
+            print(f" • Blended Expected Cost : ${router.calibrated_cost:.6f} / query (vs ${terminal_cost:.4f} terminal)")
+            print(f" • Inference Cost Savings: {savings:.2f}% reduction")
+            print(f" • Guaranteed Upper Risk : {router.calibrated_upper_risk * 100:.2f}% (95% CI)\n")
+
+            print(" Traffic Allocation Across Tiers:")
+            for tier_name, share in router.calibrated_tier_shares.items():
+                bar = "█" * int(share * 25)
+                print(f"   {tier_name:<20} : {share * 100:5.1f}% |{bar:<25}|")
+
+            print("\n Pareto Cost-Risk Frontier (ASCII):")
+            print(router.ascii_cost_risk_frontier(num_points=10))
+
+            print("\n Sample Query Routing Across Difficulty Spectrum:")
+            print(f" {'Query Type':<24} {'Difficulty':<12} {'Selected Tier':<18} {'Cost ($)':<12} {'Latency':<10} {'Savings %'}")
+            print(" " + "-" * 85)
+
+            test_cases = [
+                ("Simple Standard Query", 0.15),
+                ("Typical Mid-Tier Query", 0.45),
+                ("Complex Edge-Case", 0.75),
+                ("Adversarial Ambiguity", 0.95),
+            ]
+            for label, diff_val in test_cases:
+                s0 = max(0.05, min(0.99, 1.0 - 0.85 * diff_val))
+                s1 = max(0.15, min(0.99, 1.0 - 0.50 * diff_val))
+                dec = router.route(
+                    diff_val,
+                    score_provider=lambda t_idx, q, _s0=s0, _s1=s1: _s0 if t_idx == 0 else _s1,
+                )
+                print(f" {label:<24} {diff_val:<12.2f} {dec.selected_tier:<18} ${dec.cumulative_cost:<11.5f} {dec.cumulative_latency_ms:<9.1f}ms {dec.cost_savings_pct:<8.1f}%")
             print("=" * 65 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard

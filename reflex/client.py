@@ -77,6 +77,7 @@ class Reflex:
         calibrator: Optional[Any] = None,
         venn_abers: Optional[Any] = None,
         selective_reject: Optional[Any] = None,
+        cascade: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -95,6 +96,12 @@ class Reflex:
             self.selective_reject = SelectiveClassifier()
         else:
             self.selective_reject = selective_reject
+
+        if cascade is True:
+            from reflex.cascade import CascadeRouter
+            self.cascade = CascadeRouter()
+        else:
+            self.cascade = cascade
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -535,6 +542,26 @@ class Reflex:
                         result.should_escalate = True
             result.rejection = rejection_results
 
+        # 11. Cost-Aware Dual-Brain Cascades & Risk-Budgeted Routing (Phase 40)
+        if self.cascade is not None and getattr(self.cascade, "is_calibrated", False):
+            scores = []
+            for dec in result.decisions.values():
+                if hasattr(dec, "confidence"):
+                    scores.append(float(dec.confidence))
+                elif hasattr(dec, "probability") and dec.probability is not None:
+                    p = float(dec.probability)
+                    scores.append(max(p, 1.0 - p))
+            avg_score = sum(scores) / len(scores) if scores else 0.5
+
+            def default_score_provider(tier_idx: int, q: Any) -> float:
+                return avg_score
+
+            cascade_dec = self.cascade.route(state, score_provider=default_score_provider)
+            result.cascade = cascade_dec
+            if cascade_dec.tier_index == len(self.cascade.tiers) - 1 and len(self.cascade.tiers) > 1:
+                # Escalated through to terminal tier
+                result.should_escalate = True
+
         return result
 
     def audit_root(self) -> Optional[str]:
@@ -701,6 +728,18 @@ class Reflex:
         """
         if self.selective_reject is not None:
             self.selective_reject.add_sample(score, is_error)
+
+    def record_cascade_feedback(
+        self,
+        tier_scores: Dict[int, float],
+        tier_errors: Dict[int, Union[bool, int]],
+    ) -> None:
+        """
+        Records ground truth feedback across cascade tiers (Phase 40).
+        Updates multi-tier calibration dataset for cost-risk optimization.
+        """
+        if self.cascade is not None:
+            self.cascade.add_sample(tier_scores, tier_errors)
 
     def sync_fleet(self) -> Dict[str, Any]:
         """Pings all fleet peers and returns cluster connectivity metrics."""

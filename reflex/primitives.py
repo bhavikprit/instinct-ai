@@ -167,6 +167,7 @@ class DecisionResult:
     calibration: Optional[Dict[str, Any]] = None
     venn_abers: Optional[Dict[str, Any]] = None
     rejection: Optional[Dict[str, Any]] = None
+    cascade: Optional[Dict[str, Any]] = None
     should_escalate: bool = False
 
     def __getitem__(self, key: str) -> PrimitiveType:
@@ -231,6 +232,8 @@ class DecisionResult:
                 k: (v.to_dict() if hasattr(v, "to_dict") else v)
                 for k, v in self.rejection.items()
             }
+        if self.cascade is not None:
+            d["cascade"] = self.cascade.to_dict() if hasattr(self.cascade, "to_dict") else self.cascade
         if self.should_escalate:
             d["should_escalate"] = True
         return d

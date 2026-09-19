@@ -1348,6 +1348,16 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Seamless `Reflex(selective_reject=...)` runtime integration with `result.rejection` and `rx.record_selective_feedback`
    - [x] CLI inspection and Risk-Coverage curve benchmarking tools (`reflex reject info`, `reflex reject benchmark`)
    - [x] 45-test suite verification (`tests/test_reject.py`) and live risk-controlled production simulation (`examples/39_selective_classification_rejection.py`)
+ - [x] **Phase 40: Cost-Aware Dual-Brain Cascades & Risk-Budgeted Routing (`reflex.cascade`)**
+   - [x] FrugalML / Cascade multi-tier model hierarchy optimization (Chen et al., NeurIPS 2020; Wang et al., 2022)
+   - [x] Constrained optimization solver calibrating sequential thresholds $\vec{\theta}^* = (\theta_0, \dots, \theta_{K-2})$ minimizing inference cost subject to risk budget $r^*$ (or quality $Q^*$)
+   - [x] Finite-sample statistical risk upper bounding on blended cascade error rate via Wilson score intervals
+   - [x] Pareto Cost-Risk frontier computation, cost reduction %, and terminal ASCII trade-off visualization
+   - [x] Contextual exploration ($\epsilon$-greedy) and dynamic operational fallback on tier timeout or HTTP 429
+   - [x] Zero-dependency binary persistence format (`.reflex-cascade`, magic `RFCS`, 56-byte structured header, 32-bit CRC32 trailer)
+   - [x] Seamless `Reflex(cascade=...)` runtime integration with `result.cascade` and `rx.record_cascade_feedback`
+   - [x] CLI inspection and Pareto cost-risk curve benchmarking tools (`reflex cascade info`, `reflex cascade benchmark`)
+   - [x] 31-test suite verification (`tests/test_cascade.py`) and live 3-tier production simulation (`examples/40_cost_aware_dual_brain_cascade.py`)
 
 
 ---
