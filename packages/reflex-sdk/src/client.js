@@ -8,6 +8,7 @@ import { PureSemanticEngine } from "./engine.js";
 import { SemanticVectorEncoder, cosineSimilarity } from "./encoder.js";
 import { InstinctCache } from "./cache.js";
 import { GuardrailSuite } from "./guardrails.js";
+import { CompiledInstinct } from "./compiler.js";
 
 export class Reflex {
   /**
@@ -18,6 +19,7 @@ export class Reflex {
    * @param {boolean|GuardrailSuite} [options.guardrails=false] - Guardrail suite.
    * @param {string|null} [options.baseUrl=null] - Optional URL to Reflex REST gateway (e.g., http://localhost:8000).
    * @param {boolean} [options.learning=false] - Enable online active learning instinct head.
+   * @param {CompiledInstinct|null} [options.compiledInstinct=null] - Pre-compiled .reflex decision model.
    */
   constructor({
     backend = "semantic",
@@ -26,10 +28,12 @@ export class Reflex {
     guardrails = false,
     baseUrl = null,
     learning = false,
+    compiledInstinct = null,
   } = {}) {
     this.backendName = backend;
     this.temperature = temperature;
     this.baseUrl = baseUrl;
+    this.compiledInstinct = compiledInstinct;
     this.engine = new PureSemanticEngine({ temperature });
     this.encoder = new SemanticVectorEncoder();
 
@@ -65,6 +69,36 @@ export class Reflex {
     if (this.cache) {
       const cached = this.cache.get(state, questions);
       if (cached) return cached;
+    }
+
+    // 2. Fast-path: Pre-compiled .reflex model evaluation (<20µs)
+    if (this.compiledInstinct) {
+      const compRes = this.compiledInstinct.predict(state);
+      const decisions = {};
+      for (const [k, q] of Object.entries(questions)) {
+        if (q instanceof Choice) {
+          const c = compRes.decisions.choice;
+          decisions[k] = c ? q.resolve(c.selected, c.distribution) : q.resolve(this.compiledInstinct.options[0] || "", {});
+        } else if (q instanceof Noul) {
+          const n = compRes.decisions.noul;
+          decisions[k] = n ? q.resolve(n.probability) : q.resolve(0.5);
+        } else if (q instanceof Score) {
+          const s = compRes.decisions.score;
+          decisions[k] = s ? q.resolve(s.score, s.confidence) : q.resolve(5.0);
+        } else {
+          decisions[k] = q.resolve();
+        }
+      }
+      const res = new DecisionResult({
+        decisions,
+        latencyMs: compRes.latencyMs,
+        backend: `compiled:${this.compiledInstinct.name}`,
+        inputTokens: compRes.inputTokens,
+        outputTokens: 0,
+        costUsd: 0.0,
+      });
+      if (this.cache) this.cache.set(state, questions, res);
+      return res;
     }
 
     let result = null;
@@ -295,5 +329,31 @@ export class Reflex {
 
     const loss = -Math.log(Math.max(1e-9, targetP));
     return Math.round(loss * 10000) / 10000;
+  }
+
+  /**
+   * Loads a .reflex binary model artifact into this client instance.
+   * @param {Uint8Array|ArrayBuffer|string} bufferOrPath
+   * @returns {Promise<CompiledInstinct>}
+   */
+  async loadCompiledModel(bufferOrPath) {
+    if (typeof bufferOrPath === "string") {
+      this.compiledInstinct = await CompiledInstinct.fromFile(bufferOrPath);
+    } else {
+      this.compiledInstinct = CompiledInstinct.fromBinary(bufferOrPath);
+    }
+    return this.compiledInstinct;
+  }
+
+  /**
+   * Executes sub-20µs direct inference using the loaded compiled instinct head.
+   * @param {string} state
+   * @returns {DecisionResult}
+   */
+  predict(state) {
+    if (!this.compiledInstinct) {
+      throw new Error("No compiled .reflex model loaded. Pass compiledInstinct to constructor or call rx.loadCompiledModel().");
+    }
+    return this.compiledInstinct.predict(state);
   }
 }

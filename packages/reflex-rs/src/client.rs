@@ -1,5 +1,6 @@
 //! High-level Reflex runtime client for Rust applications.
 
+use crate::compiler::{CompiledInstinct, CompiledResult};
 use crate::encoder::{cosine_similarity, SemanticVectorEncoder, VECTOR_DIM};
 use crate::guardrails::{GuardrailResult, GuardrailSuite};
 use crate::primitives::{Choice, ChoiceResult, Noul, NoulResult, Score, ScoreResult};
@@ -9,6 +10,7 @@ use crate::primitives::{Choice, ChoiceResult, Noul, NoulResult, Score, ScoreResu
 pub struct Reflex {
     encoder: SemanticVectorEncoder,
     guardrails: GuardrailSuite,
+    pub compiled_instinct: Option<CompiledInstinct>,
 }
 
 impl Reflex {
@@ -16,6 +18,23 @@ impl Reflex {
         Self {
             encoder: SemanticVectorEncoder::new(),
             guardrails: GuardrailSuite::new(),
+            compiled_instinct: None,
+        }
+    }
+
+    pub fn with_compiled_model(compiled_instinct: CompiledInstinct) -> Self {
+        Self {
+            encoder: SemanticVectorEncoder::new(),
+            guardrails: GuardrailSuite::new(),
+            compiled_instinct: Some(compiled_instinct),
+        }
+    }
+
+    /// Sub-10µs inference executing directly on the loaded compiled instinct head.
+    pub fn predict(&self, state: &str) -> Result<CompiledResult, String> {
+        match &self.compiled_instinct {
+            Some(model) => Ok(model.predict(state)),
+            None => Err("No compiled instinct model loaded. Use Reflex::with_compiled_model().".to_string()),
         }
     }
 

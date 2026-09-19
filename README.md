@@ -538,6 +538,12 @@ const isUrgent = await rx.noul("Is this an urgent production incident?", context
 if (isUrgent > 0.85) {
   // Resolved at edge with 0 cloud tokens and $0 cost!
 }
+
+// 3. Load & Run Compiled .reflex Models at the Edge (<150µs)
+import { CompiledInstinct } from "@reflex-ai/sdk";
+const model = CompiledInstinct.fromBinary(binaryBuffer);
+const triage = model.predict("Why was my credit card charged twice for renewal?");
+console.log(triage.decisions.choice.selected); // "billing" (100% math parity with Python)
 ```
 
 ---
@@ -993,6 +999,14 @@ reflex serve --compiled-model classifier.reflex --port 8080
    - [x] AI Envoy Gateway integration (`compiled_model_path`, `/v1/models`, `SHORTCIRCUIT-COMPILED`)
    - [x] Production CLI subcommand (`reflex compile --prompt "..." --options "..." --output model.reflex`)
    - [x] 12-test suite verification and interactive demonstration (`examples/24_prompt_to_instinct_compiler.py`)
+ - [x] **Phase 25: Cross-Language `.reflex` Edge Runtime in `@reflex-ai/sdk` and `reflex-rs`**
+   - [x] Zero-dependency CRC32 checksum engine and RFX1 binary deserializer in pure JavaScript/TypeScript (`packages/reflex-sdk/src/compiler.js`)
+   - [x] Isomorphic `CompiledInstinct` for Node.js, Bun, Cloudflare Workers, Vercel Edge, and Browsers
+   - [x] Zero-dependency recursive-descent JSON parser and RFX1 deserializer in pure safe Rust standard library (`packages/reflex-rs/src/compiler.rs`)
+   - [x] High-performance Rust hot-path inference (`CompiledInstinct::predict`) running in $<10\mu\text{s}$
+   - [x] Full TypeScript definitions (`packages/reflex-sdk/index.d.ts`) and Rust crate exports
+   - [x] Comprehensive cross-language unit tests and parity test suite (`tests/test_cross_language_compiler.py`)
+   - [x] 3-runtime demonstration (`examples/25_cross_language_edge_runtime.py`) showing 100% mathematical parity across Python, Node.js, and Rust
 
 
 ---

@@ -16,7 +16,9 @@ import {
   PureSemanticEngine,
   InstinctCache,
   GuardrailSuite,
+  CompiledInstinct,
   cosineSimilarity,
+  crc32,
   md5,
 } from "../index.js";
 
@@ -187,4 +189,74 @@ test("Client: Reflex high-level API and Active Learning", async () => {
 
   const updatedProb = await rx.noul("Is this a high risk financial action?", state);
   assert.ok(updatedProb > initialProb, `Updated (${updatedProb}) should be higher than initial (${initialProb})`);
+});
+
+test("Compiler: CRC32 checksum standard vector validation", () => {
+  const encoder = new TextEncoder();
+  assert.equal(crc32(encoder.encode("")), 0);
+  // Standard IEEE 802.3 test vector "123456789" -> 0xCBF43926 (3421780262)
+  assert.equal(crc32(encoder.encode("123456789")), 3421780262);
+});
+
+test("Compiler: CompiledInstinct binary loading, prediction, and CRC32 verification", () => {
+  const enc = new SemanticVectorEncoder();
+  const wBilling = enc.encode("invoice billing refund charge payment");
+  const wTech = enc.encode("crash bug latency error 500 timeout");
+
+  const payload = {
+    name: "support_classifier",
+    decision_type: "choice",
+    options: ["billing", "technical"],
+    weights: {
+      billing: Array.from(wBilling),
+      technical: Array.from(wTech),
+    },
+    biases: {
+      billing: 0.1,
+      technical: -0.1,
+    },
+    temperature: 0.5,
+    metrics: { accuracy: 0.95, brier_score: 0.05, ece: 0.04 },
+  };
+
+  const jsonBytes = new TextEncoder().encode(JSON.stringify(payload));
+  const crc = crc32(jsonBytes);
+  const buffer = new Uint8Array(12 + jsonBytes.length);
+  buffer[0] = 0x52; buffer[1] = 0x46; buffer[2] = 0x58; buffer[3] = 0x31; // RFX1
+  const view = new DataView(buffer.buffer);
+  view.setUint32(4, crc, false);
+  view.setUint32(8, jsonBytes.length, false);
+  buffer.set(jsonBytes, 12);
+
+  // Load from binary
+  const model = CompiledInstinct.fromBinary(buffer);
+  assert.equal(model.name, "support_classifier");
+  assert.equal(model.decisionType, "choice");
+  assert.equal(model.options.length, 2);
+
+  // Predict
+  const predBilling = model.predict("Need a refund for the duplicate subscription charge");
+  assert.equal(predBilling.decisions.choice.selected, "billing");
+  assert.ok(predBilling.decisions.choice.distribution.billing > 0.5);
+  assert.ok(predBilling.latencyMs < 5.0);
+
+  const predTech = model.predict("Server threw a 500 error due to database latency timeout");
+  assert.equal(predTech.decisions.choice.selected, "technical");
+
+  // Client integration
+  const rx = new Reflex({ compiledInstinct: model });
+  const clientPred = rx.predict("Why is my invoice showing an extra payment fee?");
+  assert.equal(clientPred.decisions.choice.selected, "billing");
+
+  // Rejection of tampered byte (CRC32 mismatch)
+  const tampered = new Uint8Array(buffer);
+  tampered[15] ^= 0xff;
+  assert.throws(() => {
+    CompiledInstinct.fromBinary(tampered);
+  }, /CRC32 checksum mismatch/);
+
+  // Rejection of truncated header
+  assert.throws(() => {
+    CompiledInstinct.fromBinary(new Uint8Array([0x52, 0x46]));
+  }, /header too short/);
 });

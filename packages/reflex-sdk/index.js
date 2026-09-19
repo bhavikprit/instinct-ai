@@ -13,6 +13,7 @@ export {
   PIIGuardrail,
   GuardrailSuite,
 } from "./src/guardrails.js";
+export { CompiledInstinct, crc32 } from "./src/compiler.js";
 export { Reflex } from "./src/client.js";
 
 // Default export

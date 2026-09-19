@@ -164,6 +164,41 @@ export interface ReflexOptions {
   guardrails?: boolean | GuardrailSuite;
   baseUrl?: string | null;
   learning?: boolean;
+  compiledInstinct?: CompiledInstinct | null;
+}
+
+export declare function crc32(bytes: Uint8Array): number;
+
+export interface CompiledInstinctOptions {
+  name: string;
+  decisionType: "choice" | "noul" | "score";
+  options?: string[];
+  weights?: Record<string, number[]>;
+  biases?: Record<string, number>;
+  temperature?: number;
+  metrics?: Record<string, any> | null;
+  spec?: Record<string, any> | null;
+  compiledAt?: string | null;
+  version?: string;
+}
+
+export declare class CompiledInstinct {
+  name: string;
+  decisionType: "choice" | "noul" | "score";
+  options: string[];
+  weights: Record<string, number[]>;
+  biases: Record<string, number>;
+  temperature: number;
+  metrics: Record<string, any>;
+  spec: Record<string, any> | null;
+  compiledAt: string | null;
+  version: string;
+
+  constructor(options: CompiledInstinctOptions);
+  static fromBinary(buffer: Uint8Array | ArrayBuffer | Buffer): CompiledInstinct;
+  static fromFile(filePath: string): Promise<CompiledInstinct>;
+  static fromFileSync(filePath: string): CompiledInstinct;
+  predict(state: string): DecisionResult;
 }
 
 export declare class Reflex {
@@ -174,10 +209,13 @@ export declare class Reflex {
   cache: InstinctCache | null;
   guardrails: GuardrailSuite | null;
   learning: boolean;
+  compiledInstinct: CompiledInstinct | null;
 
   constructor(options?: ReflexOptions);
 
   evaluate(state: string, questions: Record<string, PrimitiveType>): Promise<DecisionResult>;
+  predict(state: string): DecisionResult;
+  loadCompiledModel(bufferOrPath: Uint8Array | ArrayBuffer | string): Promise<CompiledInstinct>;
   noul(instructions: string, state: string, threshold?: number): Promise<number>;
   choice(instructions: string, options: string[], state: string, criteria?: Record<string, string> | null): Promise<string>;
   score(instructions: string, state: string, minVal?: number, maxVal?: number): Promise<number>;

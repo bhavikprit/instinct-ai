@@ -1,5 +1,5 @@
 use reflex_rs::{
-    cosine_similarity, Md5, Reflex, SemanticVectorEncoder, VECTOR_DIM,
+    cosine_similarity, crc32, CompiledInstinct, Md5, Reflex, SemanticVectorEncoder, VECTOR_DIM,
 };
 
 #[test]
@@ -114,4 +114,75 @@ fn test_semantic_similarity_ranking() {
         sim_close > sim_distant,
         "Semantic similarity should rank related query higher"
     );
+}
+
+#[test]
+fn test_crc32_standard_vectors() {
+    assert_eq!(crc32(b""), 0);
+    // Standard IEEE 802.3 test vector "123456789" -> 0xCBF43926 (3421780262)
+    assert_eq!(crc32(b"123456789"), 0xCBF43926);
+}
+
+#[test]
+fn test_compiled_instinct_from_bytes_and_predict() {
+    let enc = SemanticVectorEncoder::new();
+    let w_billing = enc.encode("invoice billing refund payment charge");
+    let w_tech = enc.encode("crash bug error latency 500 timeout");
+
+    // Manually construct JSON representation of .reflex payload
+    let mut payload = String::new();
+    payload.push_str(r#"{"name":"rust_classifier","decision_type":"choice","options":["billing","technical"],"weights":{"billing":["#);
+    for (i, &val) in w_billing.iter().enumerate() {
+        if i > 0 {
+            payload.push(',');
+        }
+        payload.push_str(&format!("{:.6}", val));
+    }
+    payload.push_str(r#"],"technical":["#);
+    for (i, &val) in w_tech.iter().enumerate() {
+        if i > 0 {
+            payload.push(',');
+        }
+        payload.push_str(&format!("{:.6}", val));
+    }
+    payload.push_str(r#"]},"biases":{"billing":0.1,"technical":-0.1},"temperature":0.5}"#);
+
+    let json_bytes = payload.as_bytes();
+    let payload_len = json_bytes.len() as u32;
+    let checksum = crc32(json_bytes);
+
+    let mut binary = Vec::new();
+    binary.extend_from_slice(b"RFX1");
+    binary.extend_from_slice(&checksum.to_be_bytes());
+    binary.extend_from_slice(&payload_len.to_be_bytes());
+    binary.extend_from_slice(json_bytes);
+
+    // 1. Load from bytes
+    let model = CompiledInstinct::from_bytes(&binary).expect("Failed to parse binary model");
+    assert_eq!(model.name, "rust_classifier");
+    assert_eq!(model.decision_type, "choice");
+    assert_eq!(model.options.len(), 2);
+
+    // 2. Predict directly
+    let pred_billing = model.predict("Need a refund for duplicate subscription invoice");
+    assert_eq!(pred_billing.selected, "billing");
+    assert!(pred_billing.probability > 0.5);
+
+    let pred_tech = model.predict("Server crashed with 500 timeout latency error");
+    assert_eq!(pred_tech.selected, "technical");
+
+    // 3. Client integration
+    let rx = Reflex::with_compiled_model(model);
+    let res = rx
+        .predict("Invoice was charged twice for payment")
+        .expect("Predict failed");
+    assert_eq!(res.selected, "billing");
+
+    // 4. Reject tampered byte
+    let mut tampered = binary.clone();
+    tampered[15] ^= 0xFF;
+    assert!(CompiledInstinct::from_bytes(&tampered).is_err());
+
+    // 5. Reject short header
+    assert!(CompiledInstinct::from_bytes(b"RFX").is_err());
 }
