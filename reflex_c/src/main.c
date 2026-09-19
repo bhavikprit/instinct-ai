@@ -4,6 +4,7 @@
  */
 
 #include "reflex.h"
+#include "reflex_hnsw.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -141,6 +142,30 @@ int main(int argc, char** argv) {
     ns_per_op = (total_sec / (iterations * 5)) * 1e9;
     printf("   • 1-Bit Binary Hamming  : %.1f ns/op (sim=%.4f, 48 bytes!)\n\n",
            ns_per_op, b_sim);
+
+    // 6. Benchmark HNSW Batch Operations (Phase 30)
+    printf("6. HNSW Batch Vector Operations (Phase 30):\n");
+    const int batch_count = 1000;
+    float* batch_vectors = (float*)malloc(sizeof(float) * batch_count * REFLEX_VECTOR_DIM);
+    float* batch_out = (float*)malloc(sizeof(float) * batch_count);
+    for (int i = 0; i < batch_count * REFLEX_VECTOR_DIM; i++) {
+        batch_vectors[i] = ((float)(i % 100)) / 100.0f;
+    }
+
+    t0 = clock();
+    int batch_iters = 5000;
+    for (int i = 0; i < batch_iters; i++) {
+        reflex_batch_dot_product_f32(vec, batch_vectors, batch_count, REFLEX_VECTOR_DIM, batch_out);
+    }
+    t1 = clock();
+    total_sec = (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+    double us_per_batch = (total_sec / batch_iters) * 1000000.0;
+    double ops_per_sec_hnsw = ((double)batch_iters * batch_count) / total_sec;
+    printf("   • Batch Dot Product (%d vecs) : %.2f µs/batch (%.0f vector-dots/sec)\n\n",
+           batch_count, us_per_batch, ops_per_sec_hnsw);
+
+    free(batch_vectors);
+    free(batch_out);
 
     printf("✅ All native C99 tests completed successfully with zero memory errors!\n");
     return 0;

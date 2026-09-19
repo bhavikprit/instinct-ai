@@ -109,6 +109,12 @@ from reflex.distill import (
     AutonomousDistiller,
     DistillationWorker,
 )
+from reflex.index import (
+    HNSWIndex,
+    HNSWConfig,
+    HNSWNode,
+    SearchResult,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -207,6 +213,10 @@ __all__ = [
     "DistillationResult",
     "AutonomousDistiller",
     "DistillationWorker",
+    "HNSWIndex",
+    "HNSWConfig",
+    "HNSWNode",
+    "SearchResult",
 ]
 
 

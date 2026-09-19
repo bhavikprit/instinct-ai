@@ -52,14 +52,20 @@ class InstinctCache:
         similarity_threshold: float = 0.88,
         ttl_seconds: Optional[float] = None,
         encoder: Optional[SemanticVectorEncoder] = None,
+        use_hnsw: bool = True,
     ):
         self.max_size = max(1, max_size)
         self.similarity_threshold = similarity_threshold
         self.ttl_seconds = ttl_seconds
         self.encoder = encoder or SemanticVectorEncoder()
+        self.use_hnsw = use_hnsw
 
         # In-memory LRU store: key -> CacheEntry
         self._entries: OrderedDict[str, CacheEntry] = OrderedDict()
+        self._hnsw_index = None
+        if self.use_hnsw:
+            from reflex.index import HNSWIndex, HNSWConfig
+            self._hnsw_index = HNSWIndex(HNSWConfig(dim=384, ef_search=32, ef_construction=64))
 
         # Telemetry
         self.exact_hits = 0
@@ -116,17 +122,31 @@ class InstinctCache:
         best_key: Optional[str] = None
         best_sim = -1.0
 
-        for key, entry in self._entries.items():
-            if entry.questions_sig != q_sig:
-                continue
-            if self._is_expired(entry, now):
-                continue
+        if self.use_hnsw and self._hnsw_index is not None and len(self._entries) >= 30:
+            candidates = self._hnsw_index.search(query_vec, k=min(15, len(self._entries)))
+            for cand in candidates:
+                cand_key = cand.payload.get("key") if isinstance(cand.payload, dict) else None
+                cand_sig = cand.payload.get("questions_sig") if isinstance(cand.payload, dict) else None
+                if cand_key and cand_key in self._entries and cand_sig == q_sig:
+                    entry = self._entries[cand_key]
+                    if not self._is_expired(entry, now):
+                        sim = cand.similarity
+                        if sim > best_sim:
+                            best_sim = sim
+                            best_entry = entry
+                            best_key = cand_key
+        else:
+            for key, entry in self._entries.items():
+                if entry.questions_sig != q_sig:
+                    continue
+                if self._is_expired(entry, now):
+                    continue
 
-            sim = cosine_similarity(query_vec, entry.vector)
-            if sim > best_sim:
-                best_sim = sim
-                best_entry = entry
-                best_key = key
+                sim = cosine_similarity(query_vec, entry.vector)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_entry = entry
+                    best_key = key
 
         if best_entry is not None and best_sim >= self.similarity_threshold:
             self._entries.move_to_end(best_key)
@@ -168,6 +188,12 @@ class InstinctCache:
         self._entries[exact_key] = entry
         self._entries.move_to_end(exact_key)
 
+        if self.use_hnsw and self._hnsw_index is not None:
+            self._hnsw_index.insert(
+                query_vec,
+                payload={"key": exact_key, "questions_sig": q_sig},
+            )
+
     def _is_expired(self, entry: CacheEntry, now: float) -> bool:
         if self.ttl_seconds is None:
             return False
@@ -188,6 +214,9 @@ class InstinctCache:
     def clear(self):
         """Empties the cache and resets counters."""
         self._entries.clear()
+        if self.use_hnsw:
+            from reflex.index import HNSWIndex, HNSWConfig
+            self._hnsw_index = HNSWIndex(HNSWConfig(dim=384, ef_search=32, ef_construction=64))
         self.exact_hits = 0
         self.semantic_hits = 0
         self.misses = 0
@@ -220,6 +249,8 @@ class InstinctCache:
             "hit_rate": self.hit_rate,
             "evictions": self.evictions,
             "latency_saved_ms": round(self.latency_saved_ms, 2),
+            "use_hnsw": self.use_hnsw,
+            "hnsw_indexed_count": len(self._hnsw_index) if self._hnsw_index else 0,
         }
 
     def save_to_file(self, filepath: str):
@@ -293,3 +324,8 @@ class InstinctCache:
             )
             if not self._is_expired(entry, now):
                 self._entries[item["key"]] = entry
+                if self.use_hnsw and self._hnsw_index is not None:
+                    self._hnsw_index.insert(
+                        entry.vector,
+                        payload={"key": item["key"], "questions_sig": entry.questions_sig},
+                    )

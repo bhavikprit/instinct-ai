@@ -323,6 +323,19 @@ def main():
     distill_trigger = distill_sub.add_parser("trigger", help="Trigger an immediate distillation cycle on a running gateway")
     distill_trigger.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
 
+    # Command: index (Zero-Dependency HNSW Vector Index & Million-Scale Instinct Memory - Phase 30)
+    index_parser = subparsers.add_parser("index", help="Inspect and benchmark HNSW vector index and instinct memory")
+    index_sub = index_parser.add_subparsers(dest="index_action", required=True)
+
+    index_info = index_sub.add_parser("info", help="Inspect .reflex-index binary artifact and graph structure")
+    index_info.add_argument("index_path", help="Path to .reflex-index file")
+
+    index_bench = index_sub.add_parser("benchmark", help="Benchmark HNSW logarithmic retrieval vs brute-force search")
+    index_bench.add_argument("--nodes", type=int, default=5000, help="Number of vectors to index (default: 5000)")
+    index_bench.add_argument("--dim", type=int, default=384, help="Vector dimension (default: 384)")
+    index_bench.add_argument("--queries", type=int, default=100, help="Number of benchmark search queries (default: 100)")
+    index_bench.add_argument("--k", type=int, default=5, help="Top-K neighbors to retrieve (default: 5)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -842,6 +855,93 @@ def main():
                     print()
             except Exception as e:
                 print(f"\n❌ Error triggering distillation cycle: {e}\n")
+    elif args.command == "index":
+        from reflex.index import HNSWIndex, HNSWConfig
+        if args.index_action == "info":
+            if not os.path.exists(args.index_path):
+                print(f"❌ Error: Index file '{args.index_path}' not found.")
+                sys.exit(1)
+            index = HNSWIndex.load(args.index_path)
+            stats = index.get_stats()
+            size_kb = os.path.getsize(args.index_path) / 1024.0
+
+            print("\n" + "=" * 65)
+            print(f"🌲 Reflex HNSW Vector Index: {os.path.basename(args.index_path)}")
+            print("=" * 65)
+            print(f" • File Size         : {size_kb:.1f} KB")
+            print(f" • Total Vectors     : {stats['node_count']}")
+            print(f" • Dimension         : {stats['dimension']}")
+            print(f" • Distance Metric   : {stats['metric']}")
+            print(f" • Max Hierarchy Lvl : {stats['max_level']}")
+            print(f" • Entry Point ID    : {stats['entry_point_id']}")
+            print(f" • Total Graph Edges : {stats['total_edges']}")
+            print(f" • Hyperparameters   : M={stats['M']}, M0={stats['M0']}, ef_c={stats['ef_construction']}, ef_s={stats['ef_search']}")
+            print(f" • SIMD Accelerated  : {'YES ⚡' if stats['native_accelerated'] else 'NO (Pure Python)'}")
+            print("\nLayer Distribution:")
+            for lvl, count in sorted(stats['level_distribution'].items()):
+                pct = (count / stats['node_count']) * 100 if stats['node_count'] > 0 else 0
+                print(f"  • Level {lvl:<2} : {count:>6} nodes ({pct:>5.1f}%)")
+            print("=" * 65 + "\n")
+        elif args.index_action == "benchmark":
+            import random
+            import time
+            print("\n" + "=" * 65)
+            print(f"⚡ Reflex HNSW Zero-Dependency Vector Index Benchmark")
+            print("=" * 65)
+            print(f" • Vectors to Index  : {args.nodes}")
+            print(f" • Dimension         : {args.dim}")
+            print(f" • Query Count       : {args.queries}")
+            print(f" • Top-K             : {args.k}\n")
+
+            config = HNSWConfig(dim=args.dim, M=16, M0=32, ef_construction=64, ef_search=32)
+            index = HNSWIndex(config)
+
+            print(f"1. Building HNSW Index ({args.nodes} vectors)...")
+            rng = random.Random(42)
+            dataset = [[rng.uniform(-1.0, 1.0) for _ in range(args.dim)] for _ in range(args.nodes)]
+
+            t0 = time.perf_counter()
+            for i, vec in enumerate(dataset):
+                index.insert(vec, payload={"id": i})
+            t1 = time.perf_counter()
+            build_sec = t1 - t0
+            print(f"   • Build Time    : {build_sec * 1000.0:.1f} ms ({args.nodes / build_sec:.0f} vectors/sec)")
+            print(f"   • Graph Edges   : {index.get_stats()['total_edges']}")
+            print(f"   • Max Level     : {index.max_level}")
+            print(f"   • SIMD Active   : {'YES ⚡' if index.is_native_accelerated else 'NO'}\n")
+
+            queries = [[rng.uniform(-1.0, 1.0) for _ in range(args.dim)] for _ in range(args.queries)]
+
+            print(f"2. Running O(log N) HNSW Search ({args.queries} queries, top-{args.k})...")
+            t0 = time.perf_counter()
+            for q in queries:
+                index.search(q, k=args.k)
+            t1 = time.perf_counter()
+            hnsw_sec = t1 - t0
+            hnsw_us_per_q = (hnsw_sec / args.queries) * 1_000_000.0
+            hnsw_qps = args.queries / hnsw_sec
+
+            print(f"   • Latency       : {hnsw_us_per_q:.2f} µs/query")
+            print(f"   • Throughput    : {hnsw_qps:.0f} QPS\n")
+
+            print(f"3. Running O(N) Exact Brute-Force Search ({args.queries} queries)...")
+            t0 = time.perf_counter()
+            for q in queries:
+                index.exact_brute_force_search(q, k=args.k)
+            t1 = time.perf_counter()
+            bf_sec = t1 - t0
+            bf_us_per_q = (bf_sec / args.queries) * 1_000_000.0
+            bf_qps = args.queries / bf_sec
+
+            print(f"   • Latency       : {bf_us_per_q:.2f} µs/query")
+            print(f"   • Throughput    : {bf_qps:.0f} QPS")
+            print(f"   • Speedup       : {bf_sec / hnsw_sec:.1f}x faster\n")
+
+            print("4. Calculating Recall@K...")
+            recalls = [index.compute_recall(q, k=args.k) for q in queries[:20]]
+            avg_recall = sum(recalls) / len(recalls)
+            print(f"   • Recall@{args.k}       : {avg_recall * 100:.1f}%\n")
+            print("=" * 65 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))
