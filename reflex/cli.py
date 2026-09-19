@@ -426,6 +426,17 @@ def main():
     calib_bench.add_argument("--lr", type=float, default=0.05, help="Learning rate for temperature scaling (default: 0.05)")
     calib_bench.add_argument("--bins", type=int, default=10, help="Number of calibration histogram bins (default: 10)")
 
+    # Command: va (Venn-Abers Multi-Class Conformal Predictor - Phase 38)
+    va_parser = subparsers.add_parser("va", help="Inspect and benchmark Venn-Abers multi-probabilistic calibrated intervals")
+    va_sub = va_parser.add_subparsers(dest="va_action", required=True)
+
+    va_info = va_sub.add_parser("info", help="Inspect .reflex-va model state and epistemic bounds")
+    va_info.add_argument("path", help="Path to .reflex-va file")
+
+    va_bench = va_sub.add_parser("benchmark", help="Benchmark Venn-Abers calibrated intervals and epistemic uncertainty")
+    va_bench.add_argument("--samples", type=int, default=500, help="Number of calibration samples (default: 500)")
+    va_bench.add_argument("--threshold", type=float, default=0.20, help="Epistemic uncertainty escalation threshold (default: 0.20)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -1581,6 +1592,73 @@ def main():
             print(f" • Miscalibration Alarm   : {'🚨 Miscalibrated' if st.is_miscalibrated else '✅ Well-Calibrated'}\n")
             print(" Reliability Diagram:")
             calib.print_ascii_reliability_diagram()
+            print("=" * 65 + "\n")
+    elif args.command == "va":
+        from reflex.venn_abers import VennAbersConfig, VennAbersPredictor
+        if args.va_action == "info":
+            try:
+                va = VennAbersPredictor.load(args.path)
+                mean_u = va.mean_uncertainty(num_eval_points=20)
+                brier = va.compute_brier_score()
+                print("\n" + "=" * 65)
+                print("⚡ Reflex Venn-Abers Multi-Class Conformal Predictor (.reflex-va)")
+                print("=" * 65)
+                print(f" • Calibration Samples   : {va.num_calibration_samples}")
+                print(f" • Total Seen Samples    : {va.total_samples}")
+                print(f" • Classes Configured    : {va.classes if va.classes else ['0', '1']}")
+                print(f" • Uncertainty Threshold : {va.config.max_uncertainty_threshold:.4f}")
+                print(f" • Mean Interval Width   : {mean_u:.4f}")
+                print(f" • Calibration Brier     : {brier:.4f}")
+                print(f" • Status                : {'✅ Calibrated' if va.is_calibrated else '⚠️ Warm-up needed'}\n")
+                print(" Sample Interval Predictions across Score Spectrum:")
+                print(f" {'Score':<8} {'Interval [p0, p1]':<22} {'Point p':<10} {'Uncertainty':<12} {'Escalate'}")
+                print(" " + "-" * 60)
+                for sc in [0.05, 0.20, 0.35, 0.50, 0.65, 0.80, 0.95]:
+                    res = va.predict_noul(sc)
+                    inv_str = f"[{res.p0:.3f}, {res.p1:.3f}]"
+                    esc_str = "🚨 Yes" if res.should_escalate else "✅ No"
+                    print(f" {sc:<7.2f} {inv_str:<22} {res.p_calibrated:<10.3f} {res.uncertainty:<12.3f} {esc_str}")
+                print("=" * 65 + "\n")
+            except Exception as e:
+                print(f"❌ Error inspecting Venn-Abers model: {e}")
+                sys.exit(1)
+        elif args.va_action == "benchmark":
+            import random
+            print("\n" + "=" * 65)
+            print("🚀 Reflex Venn-Abers Multi-Probabilistic Intervals Benchmark")
+            print("=" * 65)
+            rng = random.Random(42)
+            cfg = VennAbersConfig(max_uncertainty_threshold=args.threshold, min_calibration_samples=20)
+            va = VennAbersPredictor(config=cfg)
+
+            # Generate synthetic calibration data with dense central region and sparse extremes
+            for _ in range(args.samples):
+                # Normal distribution centered at 0.5
+                sc = min(0.99, max(0.01, rng.gauss(0.5, 0.15)))
+                # Ground truth follows a noisy sigmoid
+                prob = 1.0 / (1.0 + math.exp(-6.0 * (sc - 0.5)))
+                y = 1 if rng.random() < prob else 0
+                va.add_calibration_sample(sc, y)
+
+            print(f" • Calibration Samples   : {va.num_calibration_samples}")
+            print(f" • Escalation Threshold  : {va.config.max_uncertainty_threshold:.2f}")
+            print("\n Epistemic Uncertainty vs Sample Density across Query Regimes:")
+            print(f" {'Regime':<24} {'Query Score':<14} {'Interval [p0, p1]':<22} {'Width (U)':<12} {'Status'}")
+            print(" " + "-" * 80)
+
+            test_cases = [
+                ("In-Distribution (Dense)", 0.50),
+                ("In-Distribution (Mid)", 0.60),
+                ("Moderate Density", 0.75),
+                ("Sparse Density (Tail)", 0.10),
+                ("Out-of-Distribution (OOD)", 0.01),
+                ("Out-of-Distribution (OOD)", 0.99),
+            ]
+            for label, sc in test_cases:
+                res = va.predict_noul(sc)
+                inv_str = f"[{res.p0:.4f}, {res.p1:.4f}]"
+                status = "🚨 Escalated (OOD/Sparse)" if res.should_escalate else "✅ Autonomous (Confident)"
+                print(f" {label:<24} {sc:<14.2f} {inv_str:<22} {res.uncertainty:<12.4f} {status}")
             print("=" * 65 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard

@@ -75,6 +75,7 @@ class Reflex:
         aci: Optional[Any] = None,
         cqr: Optional[Any] = None,
         calibrator: Optional[Any] = None,
+        venn_abers: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -87,6 +88,7 @@ class Reflex:
         self.aci = aci
         self.cqr = cqr
         self.calibrator = calibrator
+        self.venn_abers = venn_abers
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -491,6 +493,26 @@ class Reflex:
             if self.calibrator.is_miscalibrated:
                 result.should_escalate = True
 
+        # 9. Venn-Abers Multi-Probabilistic Calibration (Phase 38)
+        if self.venn_abers is not None and getattr(self.venn_abers, "is_calibrated", False):
+            va_results = {}
+            for k, dec in result.decisions.items():
+                if isinstance(dec, Noul) and dec.probability is not None:
+                    va_res = self.venn_abers.predict_noul(dec.probability)
+                    va_results[k] = va_res
+                    dec.probability = va_res.p_calibrated
+                    dec.value = dec.probability >= dec.threshold
+                    if va_res.should_escalate:
+                        result.should_escalate = True
+                elif isinstance(dec, Choice) and dec.distribution:
+                    va_res = self.venn_abers.predict_choice(dec.distribution)
+                    va_results[k] = va_res
+                    dec.distribution = va_res.calibrated_distribution
+                    dec.selected = va_res.selected
+                    if va_res.should_escalate:
+                        result.should_escalate = True
+            result.venn_abers = va_results
+
         return result
 
     def audit_root(self) -> Optional[str]:
@@ -633,6 +655,18 @@ class Reflex:
         if self.calibrator is not None:
             label_float = 1.0 if (true_label is True or true_label == 1 or true_label == 1.0) else 0.0
             self.calibrator.update(raw_prob=raw_prob, true_label=label_float)
+
+    def record_venn_abers_feedback(
+        self,
+        raw_score: float,
+        true_label: Union[bool, int, float, str],
+    ) -> None:
+        """
+        Records ground truth feedback directly to the Venn-Abers conformal predictor (Phase 38).
+        Updates calibration dataset for certified multi-probabilistic intervals [p0, p1].
+        """
+        if self.venn_abers is not None:
+            self.venn_abers.add_calibration_sample(raw_score, true_label)
 
     def sync_fleet(self) -> Dict[str, Any]:
         """Pings all fleet peers and returns cluster connectivity metrics."""

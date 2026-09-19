@@ -154,6 +154,12 @@ from reflex.calib import (
     CalibrationStatus,
     OnlineProbabilityCalibrator,
 )
+from reflex.venn_abers import (
+    VennAbersConfig,
+    VennAbersNoulResult,
+    VennAbersChoiceResult,
+    VennAbersPredictor,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -281,6 +287,10 @@ __all__ = [
     "CalibConfig",
     "CalibrationStatus",
     "OnlineProbabilityCalibrator",
+    "VennAbersConfig",
+    "VennAbersNoulResult",
+    "VennAbersChoiceResult",
+    "VennAbersPredictor",
 ]
 
 

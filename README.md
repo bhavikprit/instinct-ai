@@ -1326,6 +1326,17 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Seamless `Reflex(calibrator=calib_engine)` runtime integration automatically re-scaling `Noul` and `Choice` decisions with `result.calibration`
    - [x] CLI inspection and online probability calibration benchmarking tools (`reflex calib info`, `reflex calib benchmark`)
    - [x] 25-test suite verification (`tests/test_calib.py`) and live drift recovery demonstration (`examples/37_online_probability_calibration_drift.py`)
+ - [x] **Phase 38: Venn-Abers Multi-Class Conformal Predictors (`reflex.venn_abers`)**
+   - [x] Vovk & Petej (2014) distribution-free multi-probabilistic calibrated intervals $[p_0, p_1]$
+   - [x] Fast pure-Python Pool Adjacent Violators Algorithm (PAVA) isotonic regression with $O(N)$ active set merging
+   - [x] Epistemic uncertainty quantification ($U = p_1 - p_0$) isolating out-of-distribution / data-sparse queries from aleatoric ambiguity
+   - [x] Minimum log-loss balanced point estimator: $p_{\text{calib}} = \frac{p_1}{1 - p_0 + p_1}$
+   - [x] Multi-class Inductive Venn-Abers Predictor (IVAP) for categorical `Choice` routing with certified class-level intervals
+   - [x] Epistemic safety thresholds triggering automated System-2 fail-safe escalation when $U > \text{max\_uncertainty\_threshold}$
+   - [x] Zero-dependency binary persistence format (`.reflex-va`, magic `RFVA`, 48-byte structured header, 32-bit CRC32 trailer)
+   - [x] Seamless `Reflex(venn_abers=engine)` runtime integration with `result.venn_abers` and `rx.record_venn_abers_feedback`
+   - [x] CLI inspection and density-stratified interval benchmarking tools (`reflex va info`, `reflex va benchmark`)
+   - [x] 25-test suite verification (`tests/test_venn_abers.py`) and live in-distribution vs OOD epistemic demonstration (`examples/38_venn_abers_calibrated_intervals.py`)
 
 
 ---
