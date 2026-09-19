@@ -75,6 +75,14 @@ class GatewayConfig:
     compiled_instinct: Optional[Any] = None
     ensemble_path: Optional[str] = None
     ensemble: Optional[Any] = None
+    distill_enabled: bool = False
+    distill_buffer_size: int = 2000
+    distill_storage_path: Optional[str] = None
+    distill_worker_interval: float = 60.0
+    distill_min_samples: int = 15
+    distill_auto_stage: bool = True
+    distill_buffer: Optional[Any] = None
+    distill_worker: Optional[Any] = None
 
 
 
@@ -264,6 +272,8 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
     audit_log: Optional[MerkleAuditLog] = None
     compiled_instinct: Optional[Any] = None
     ensemble: Optional[Any] = None
+    distill_buffer: Optional[Any] = None
+    distill_worker: Optional[Any] = None
 
     @classmethod
     def initialize(cls, config: GatewayConfig):
@@ -356,6 +366,41 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         else:
             cls.audit_log = None
 
+        # Autonomous Distillation Engine (Phase 29)
+        if config.distill_buffer is not None:
+            cls.distill_buffer = config.distill_buffer
+        elif config.distill_enabled:
+            from reflex.distill import DistillationBuffer
+            cls.distill_buffer = DistillationBuffer(
+                max_size=config.distill_buffer_size,
+                storage_path=config.distill_storage_path,
+            )
+        else:
+            cls.distill_buffer = None
+
+        if config.distill_worker is not None:
+            cls.distill_worker = config.distill_worker
+        elif config.distill_enabled and cls.distill_buffer is not None:
+            from reflex.distill import DistillationWorker
+            def _on_candidate_ready(result):
+                if config.distill_auto_stage and cls.shadow_router is not None and result.model_path:
+                    try:
+                        from reflex.compiler import CompiledInstinct
+                        chal = CompiledInstinct.load(result.model_path)
+                        cls.shadow_router.stage_candidate_model(chal)
+                    except Exception:
+                        pass
+
+            cls.distill_worker = DistillationWorker(
+                buffer=cls.distill_buffer,
+                interval_seconds=config.distill_worker_interval,
+                min_new_samples=config.distill_min_samples,
+                on_candidate_ready=_on_candidate_ready,
+            )
+            cls.distill_worker.start()
+        else:
+            cls.distill_worker = None
+
     def do_GET(self):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/healthz", "/health"):
@@ -419,6 +464,22 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 })
             else:
                 self._send_json(400, {"error": "Instinct Ensemble is not enabled on this gateway"})
+        elif norm_path in ("/v1/distill/status", "/distill/status"):
+            if self.distill_buffer is not None:
+                worker_st = self.distill_worker.status() if self.distill_worker else {}
+                buf_st = self.distill_buffer.stats()
+                self._send_json(200, {
+                    "buffer": buf_st,
+                    "worker": worker_st,
+                })
+            else:
+                self._send_json(400, {"error": "Distillation engine is not enabled on this gateway"})
+        elif norm_path in ("/v1/distill/traces", "/distill/traces"):
+            if self.distill_buffer is not None:
+                traces = [t.to_dict() for t in self.distill_buffer.get_traces(limit=50)]
+                self._send_json(200, {"traces": traces, "count": len(traces)})
+            else:
+                self._send_json(400, {"error": "Distillation engine is not enabled on this gateway"})
         elif norm_path in ("/v1/mesh/peers", "/mesh/peers"):
 
             if self.mesh_node is not None:
@@ -519,6 +580,23 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(200, {"status": "rolled_back", "stats": self.shadow_router.stats()})
             else:
                 self._send_json(400, {"error": "Canary/Shadowing is not enabled on this gateway"})
+        elif norm_path in ("/v1/distill/trigger", "/distill/trigger"):
+            if self.distill_worker is not None:
+                res = self.distill_worker.trigger_cycle()
+                if res:
+                    self._send_json(200, {"status": "success", "result": res.to_dict()})
+                else:
+                    self._send_json(200, {"status": "skipped", "message": "Insufficient new samples or clusters"})
+            elif self.distill_buffer is not None:
+                from reflex.distill import AutonomousDistiller
+                distiller = AutonomousDistiller()
+                res = distiller.distill_from_buffer(self.distill_buffer, min_samples=2)
+                if res:
+                    self._send_json(200, {"status": "success", "result": res.to_dict()})
+                else:
+                    self._send_json(200, {"status": "skipped", "message": "Insufficient samples to form clusters"})
+            else:
+                self._send_json(400, {"error": "Distillation engine is not enabled on this gateway"})
         elif norm_path in ("/v1/mesh/sync", "/mesh/sync"):
 
             if self.mesh_node is not None:
@@ -888,6 +966,22 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 if self.cache is not None:
                     self.cache.set(prompt, resp_json, model=model)
 
+                # Record into distillation buffer (Phase 29)
+                if self.distill_buffer is not None:
+                    try:
+                        content = ""
+                        choices = resp_json.get("choices", [])
+                        if choices:
+                            content = choices[0].get("message", {}).get("content", "")
+                        self.distill_buffer.record(
+                            prompt=prompt,
+                            response=content,
+                            model=model,
+                            latency_ms=latency_ms,
+                        )
+                    except Exception:
+                        pass
+
                 self._send_json(resp.status, resp_json, extra_headers={
                     "X-Reflex-Cache": "MISS",
                     "X-Reflex-Latency-Ms": f"{latency_ms:.2f}",
@@ -1005,6 +1099,8 @@ class ReflexGatewayServer:
                 print(f"   • Policy Engine    : Active ({len(self.handler_class.policy_engine.ruleset.rules)} rules)")
             if self.handler_class.audit_log is not None:
                 print(f"   • Merkle Audit Log : Active (Height: {self.handler_class.audit_log.height()}, Root: {self.handler_class.audit_log.root[:12]}...)")
+            if self.handler_class.distill_buffer is not None:
+                print(f"   • Distill Engine   : Active (Buffer: {self.handler_class.distill_buffer.size()}/{self.handler_class.distill_buffer.max_size})")
             try:
                 self.server.serve_forever()
             except KeyboardInterrupt:
@@ -1012,6 +1108,8 @@ class ReflexGatewayServer:
 
     def stop(self):
         """Stop the gateway server."""
+        if self.handler_class.distill_worker is not None:
+            self.handler_class.distill_worker.stop()
         if self.handler_class.mesh_node is not None:
             self.handler_class.mesh_node.stop()
         if self.handler_class.shadow_router is not None:

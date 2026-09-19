@@ -131,6 +131,9 @@ def main():
         p.add_argument("--speculative-threshold", type=float, default=0.75, help="Confidence threshold for speculative pre-fetch (default: 0.75)")
         p.add_argument("--compiled-model", default=None, help="Path to pre-compiled .reflex model artifact")
         p.add_argument("--ensemble", default=None, help="Path to pre-compiled .reflex-ensemble artifact")
+        p.add_argument("--distill", action="store_true", help="Enable continuous autonomous distillation loop")
+        p.add_argument("--distill-buffer-size", type=int, default=2000, help="Max traces buffered in memory (default: 2000)")
+        p.add_argument("--distill-storage", default=None, help="Path to JSONL file to persist harvested traces")
 
     # Command: canary (Autonomous canary deployment & decision shadowing)
     canary_parser = subparsers.add_parser("canary", help="Manage and inspect autonomous canary deployments")
@@ -303,6 +306,23 @@ def main():
     simd_bench = simd_sub.add_parser("benchmark", help="Benchmark FP32 SIMD, INT8, and 1-bit binary dot product performance")
     simd_bench.add_argument("--iterations", type=int, default=100000, help="Number of benchmark iterations (default: 100,000)")
 
+    # Command: distill (Continuous Autonomous Distillation & Self-Synthesizing Model Factory - Phase 29)
+    distill_parser = subparsers.add_parser("distill", help="Inspect and run continuous autonomous distillation cycles")
+    distill_sub = distill_parser.add_subparsers(dest="distill_action", required=True)
+
+    distill_status = distill_sub.add_parser("status", help="Inspect distillation buffer and worker status")
+    distill_status.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
+    distill_status.add_argument("--buffer", default=None, help="Path to local distillation JSONL buffer to inspect directly")
+
+    distill_run = distill_sub.add_parser("run", help="Run an on-demand distillation cycle over buffered or harvested JSONL traces")
+    distill_run.add_argument("--buffer", required=True, help="Path to input JSONL buffer file")
+    distill_run.add_argument("--output", default="distilled_model.reflex", help="Output .reflex model artifact path")
+    distill_run.add_argument("--min-samples", type=int, default=5, help="Minimum samples required (default: 5)")
+    distill_run.add_argument("--clusters", type=int, default=None, help="Number of intent clusters to mine (default: auto)")
+
+    distill_trigger = distill_sub.add_parser("trigger", help="Trigger an immediate distillation cycle on a running gateway")
+    distill_trigger.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -349,6 +369,9 @@ def main():
             speculative_threshold=getattr(args, "speculative_threshold", 0.75),
             compiled_model_path=getattr(args, "compiled_model", None),
             ensemble_path=getattr(args, "ensemble", None),
+            distill_enabled=getattr(args, "distill", False),
+            distill_buffer_size=getattr(args, "distill_buffer_size", 2000),
+            distill_storage_path=getattr(args, "distill_storage", None),
         )
         server = ReflexGatewayServer(cfg)
         try:
@@ -741,6 +764,84 @@ def main():
             print("=" * 75)
             print(f"🚀 FP32 SIMD Speedup    : {ns_scalar / max(1.0, ns_simd):.1f}x vs pure Python")
             print(f"⚡ 1-Bit Hamming Speedup: {ns_scalar / max(1.0, ns_bin):.1f}x vs pure Python (32x memory compression)\n")
+    elif args.command == "distill":
+        from reflex.distill import DistillationBuffer, AutonomousDistiller
+        import urllib.request
+        import urllib.error
+
+        if args.distill_action == "status":
+            if getattr(args, "buffer", None):
+                buf = DistillationBuffer(storage_path=args.buffer)
+                st = buf.stats()
+                print("=" * 65)
+                print(f"📦 Reflex Distillation Local Buffer: {args.buffer}")
+                print("=" * 65)
+                print(f" • Buffered Traces   : {st['current_size']}")
+                print(f" • Total Recorded    : {st['total_recorded']}")
+                print(f" • PII Filtered      : {st['pii_redacted_count']}")
+                print(f" • Unique Upstreams  : {', '.join(st['unique_models']) if st['unique_models'] else 'None'}")
+                print("=" * 65 + "\n")
+            else:
+                gateway = getattr(args, "gateway", "http://127.0.0.1:8080").rstrip("/")
+                try:
+                    req = urllib.request.Request(f"{gateway}/v1/distill/status")
+                    with urllib.request.urlopen(req, timeout=5.0) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        buf_st = data.get("buffer", {})
+                        worker_st = data.get("worker", {})
+                        print("=" * 65)
+                        print(f"🏭 Reflex Continuous Distillation Factory (Gateway: {gateway})")
+                        print("=" * 65)
+                        print(f" • In-Memory Traces  : {buf_st.get('current_size', 0)} / {buf_st.get('max_size', 2000)}")
+                        print(f" • Total Recorded    : {buf_st.get('total_recorded', 0)}")
+                        print(f" • PII Sanitized     : {buf_st.get('pii_redacted_count', 0)}")
+                        print(f" • Worker Active     : {'YES ⚡' if worker_st.get('running') else 'NO ⏸️'}")
+                        print(f" • Distill Cycles    : {worker_st.get('total_cycles', 0)}")
+                        latest = worker_st.get("latest_candidate")
+                        if latest:
+                            print(f" • Latest Model      : {latest.get('model_name')} (Accuracy: {latest.get('accuracy', 0)*100:.1f}%)")
+                            print(f"   Clusters ({latest.get('cluster_count')}): {', '.join(latest.get('options', []))}")
+                        print("=" * 65 + "\n")
+                except Exception as e:
+                    print(f"\n❌ Error querying distillation gateway: {e}\n")
+        elif args.distill_action == "run":
+            if not os.path.exists(args.buffer):
+                print(f"❌ Error: Buffer file '{args.buffer}' not found.")
+                sys.exit(1)
+            buf = DistillationBuffer(storage_path=args.buffer)
+            print(f"\n🏭 Running Autonomous Distillation on '{args.buffer}' ({buf.size()} traces)...")
+            distiller = AutonomousDistiller()
+            res = distiller.distill_from_buffer(
+                buffer=buf,
+                output_path=args.output,
+                min_samples=args.min_samples,
+                k=args.clusters,
+            )
+            if res:
+                print(f"✅ Distillation Successful! Compiled model: {args.output}")
+                print(f" • Mined Clusters    : {res.cluster_count} ({', '.join(res.options)})")
+                print(f" • Training Accuracy : {res.accuracy * 100:.1f}%")
+                print(f" • Brier Score       : {res.brier_score:.4f}")
+                print(f" • ECE Score         : {res.ece:.4f}")
+                print(f" • Training Time     : {res.training_time_ms:.1f} ms")
+                print(f" • Output Artifact   : {args.output} ({os.path.getsize(args.output)/1024:.1f} KB)\n")
+            else:
+                print("⚠️ Distillation skipped: insufficient distinct clusters or samples.\n")
+        elif args.distill_action == "trigger":
+            gateway = getattr(args, "gateway", "http://127.0.0.1:8080").rstrip("/")
+            try:
+                req = urllib.request.Request(f"{gateway}/v1/distill/trigger", data=b"{}", headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=10.0) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    print(f"\n⚡ Distillation Trigger Response: {data.get('status')}")
+                    if data.get("result"):
+                        r = data["result"]
+                        print(f" • New Model Compiled: {r.get('model_name')} (Accuracy: {r.get('accuracy', 0)*100:.1f}%)")
+                    elif data.get("message"):
+                        print(f" • Message: {data.get('message')}")
+                    print()
+            except Exception as e:
+                print(f"\n❌ Error triggering distillation cycle: {e}\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))

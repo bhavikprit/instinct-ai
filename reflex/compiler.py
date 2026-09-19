@@ -229,6 +229,29 @@ class CompiledInstinct:
             cost_usd=0.0,
         )
 
+    def evaluate(self, state: str, questions: Optional[Dict[str, Any]] = None, **kwargs) -> DecisionResult:
+        """Evaluates state and returns standard DecisionResult conforming to Reflex model contract."""
+        res = self.predict(state)
+        # If specific question keys requested, align decisions map
+        if questions:
+            aligned_decisions = {}
+            for qk, qv in questions.items():
+                if self.decision_type in res.decisions:
+                    aligned_decisions[qk] = res.decisions[self.decision_type]
+            if aligned_decisions:
+                return DecisionResult(
+                    decisions=aligned_decisions,
+                    latency_ms=res.latency_ms,
+                    backend=res.backend,
+                    input_tokens=res.input_tokens,
+                    output_tokens=res.output_tokens,
+                    cost_usd=res.cost_usd,
+                )
+        return res
+
+    def __call__(self, state: str, questions: Optional[Dict[str, Any]] = None, **kwargs) -> DecisionResult:
+        return self.evaluate(state, questions, **kwargs)
+
     def save(self, path: str) -> None:
         """
         Serializes the compiled model into a portable .reflex binary artifact.

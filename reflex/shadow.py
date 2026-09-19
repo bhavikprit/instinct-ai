@@ -540,6 +540,28 @@ class DecisionShadowRouter:
                 "message": "Challenger promoted to 100% live production traffic.",
             })
 
+    def stage_candidate_model(
+        self,
+        candidate_model: Any,
+        concordance_threshold: Optional[float] = None,
+        min_kappa: Optional[float] = None,
+    ):
+        """Replaces challenger model with a newly distilled candidate and resets tracking."""
+        with self._lock:
+            self.challenger = candidate_model
+            self.config.stage = ShadowStage.OBSERVATION
+            self.config.canary_traffic_pct = 0.0
+            if concordance_threshold is not None:
+                self.config.concordance_threshold = concordance_threshold
+            if min_kappa is not None:
+                self.config.min_kappa = min_kappa
+            self.tracker.reset()
+            self._incident_log.append({
+                "timestamp": time.time(),
+                "type": "stage_candidate",
+                "message": "New candidate model staged into shadow evaluation.",
+            })
+
     def rollback(self, reason: str = "Manual or automated safety rollback"):
         """Instantly terminates live canary traffic and halts candidate."""
         with self._lock:

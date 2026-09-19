@@ -99,6 +99,16 @@ from reflex.simd import (
     CPUFeatures,
     detect_cpu_features,
 )
+from reflex.distill import (
+    DistillationTrace,
+    DistillationBuffer,
+    MinedCluster,
+    ClusterMiner,
+    IntentSynthesizer,
+    DistillationResult,
+    AutonomousDistiller,
+    DistillationWorker,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -189,6 +199,14 @@ __all__ = [
     "get_simd_engine",
     "CPUFeatures",
     "detect_cpu_features",
+    "DistillationTrace",
+    "DistillationBuffer",
+    "MinedCluster",
+    "ClusterMiner",
+    "IntentSynthesizer",
+    "DistillationResult",
+    "AutonomousDistiller",
+    "DistillationWorker",
 ]
 
 
