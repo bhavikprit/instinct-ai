@@ -26,6 +26,7 @@ from reflex.feedback import FeedbackCollector
 from reflex.learning import SelfTuningInstinctHead, OnlineTuner
 from reflex.backends.c_engine import NativeCEngine
 from reflex.proxy import start_proxy
+from reflex.gateway import ReflexGatewayServer, GatewayConfig, GatewayMetrics
 from reflex.flow import (
     StateGraph,
     Flow,
@@ -68,6 +69,9 @@ __all__ = [
     "StreamBlockedError",
     "StreamingDecisionGate",
     "start_proxy",
+    "ReflexGatewayServer",
+    "GatewayConfig",
+    "GatewayMetrics",
     "StateGraph",
     "Flow",
     "START",

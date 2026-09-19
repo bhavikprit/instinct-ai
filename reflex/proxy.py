@@ -143,11 +143,15 @@ class ReflexProxyHandler(BaseHTTPRequestHandler):
 
 
 def start_proxy(host: str = "127.0.0.1", port: int = 8080):
-    """Starts the drop-in OpenAI-compatible Reflex proxy server."""
-    server = HTTPServer((host, port), ReflexProxyHandler)
+    """Starts the drop-in OpenAI-compatible Reflex AI Envoy proxy server."""
+    from reflex.gateway import ReflexGatewayServer, GatewayConfig
+
+    config = GatewayConfig(host=host, port=port)
+    server = ReflexGatewayServer(config)
     print("=" * 65)
-    print(f"⚡ Reflex Proxy running at http://{host}:{port}/v1")
+    print(f"⚡ Reflex AI Envoy running at http://{host}:{port}/v1")
     print(f"Point your OpenAI SDK here:")
     print(f"  client = OpenAI(base_url='http://{host}:{port}/v1')")
     print("=" * 65)
-    server.serve_forever()
+    server.start(background=False)
+

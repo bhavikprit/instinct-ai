@@ -99,35 +99,44 @@ reflex playground --port 8000
 
 ---
 
-## 🔌 The Drop-in OpenAI Proxy (`reflex-proxy`)
+## 🛡️ The Drop-in AI Envoy & OpenAI Reverse Proxy (`reflex gateway`)
 
-Already have thousands of lines of existing OpenAI or Anthropic code? **Zero code refactoring required.**
+Already have existing OpenAI, Anthropic, or LangChain applications? **Zero code refactoring required.**
 
-### 1. Start the Reflex Proxy
+Reflex acts as an intelligent, high-throughput System-1 reverse proxy:
+- 🚀 **Multi-Tier Semantic Cache**: Instant L1 exact hash + L2 cosine similarity deduplication (<1ms).
+- 🛡️ **Pre-Flight Security Shield**: Sub-millisecond guardrail checks reject prompt injections, jailbreaks, and PII leaks before reaching upstream billing.
+- ⚡ **System-1 Short-Circuiting**: Automatically intercepts classification, routing, and boolean decision prompts, resolving them in <15ms for $0.00.
+- 📊 **Real-Time Financial ROI Telemetry**: Live metrics endpoint (`GET /v1/gateway/stats`) tracks intercepted requests, saved dollars, and spared tokens.
+
+### 1. Launch the AI Envoy Gateway
 ```bash
-python3 -m reflex.cli serve --port 8080
+reflex gateway --port 8080 --upstream https://api.openai.com/v1
 ```
 
-### 2. Point Your Client to Reflex
+### 2. Point Any OpenAI-Compatible Client to Reflex
 ```python
 from openai import OpenAI
 
-# Simply change your baseURL to Reflex!
 client = OpenAI(
     base_url="http://127.0.0.1:8080/v1",
-    api_key="sk-reflex"
+    api_key="your-openai-api-key"
 )
 
-# If the prompt is a classification or routing decision, 
-# Reflex intercepts it and resolves it in <15ms for $0.00!
-response = client.chat.completions.create(
+# 1. Semantic Deduplication (<1ms, $0 cost):
+# Queries with equivalent meaning hit the L2 semantic cache instantly
+res = client.chat.completions.create(
     model="gpt-4o",
-    messages=[{"role": "user", "content": "Classify this ticket: my account is locked out"}],
-    response_format={"type": "json_object"}
+    messages=[{"role": "user", "content": "How do I reverse duplicate Visa charges?"}]
 )
 
-print(response.choices[0].message.content)
-# Output tokens are billed as 0!
+# 2. Pre-Flight Security Interception (<1ms):
+# Injections and PII leaks are blocked at the gateway with 400 Bad Request
+# saving 100% of upstream tokens!
+
+# 3. Inspect Financial ROI Telemetry:
+# curl http://127.0.0.1:8080/v1/gateway/stats
+# -> {"total_requests": 1000, "cache_hit_rate": 0.42, "dollars_saved": 14.50, "tokens_saved": 420000}
 ```
 
 ## 🔌 Model Context Protocol (MCP) Server
@@ -718,6 +727,12 @@ print(flow.to_mermaid())  # Exports Mermaid flowchart diagram
    - [x] Strongly-typed `Noul`, `Choice`, `Score`, and `GuardrailSuite`
    - [x] Instant throughput of 79,000+ ops/sec with sub-millisecond execution
    - [x] WebAssembly compatibility (`wasm32-unknown-unknown` / `wasm32-wasi`)
+ - [x] **Phase 18: Production AI Envoy Gateway & Dynamic Cost Arbitrage**
+   - [x] Zero-dependency OpenAI-compatible reverse proxy with multi-tier semantic deduplication (<1ms L1/L2)
+   - [x] Pre-flight security guardrail interception with 400 Bad Request saving 100% downstream tokens
+   - [x] High-throughput `ReflexGatewayServer` & `ThreadingHTTPServer` with connection pooling
+   - [x] Real-time financial ROI, token savings, and latency telemetry (`GET /v1/gateway/stats`)
+   - [x] Production CLI flags (`reflex gateway --cache-ttl 3600 --similarity-threshold 0.95`)
 
 ---
 

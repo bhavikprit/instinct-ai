@@ -30,6 +30,29 @@ class TestCLI(unittest.TestCase):
         self.assertIn("Reflex Open-Weights Model Catalog:", out)
         self.assertIn("reflex-0.5b-int8", out)
 
+    def test_cli_gateway_parser(self):
+        import argparse
+        f = io.StringIO()
+        with patch("sys.stdout", f), patch.object(sys, "argv", ["reflex", "gateway", "--help"]):
+            with self.assertRaises(SystemExit) as cm:
+                main()
+            self.assertEqual(cm.exception.code, 0)
+        out = f.getvalue()
+        self.assertIn("--upstream", out)
+        self.assertIn("--cache-ttl", out)
+        self.assertIn("--similarity-threshold", out)
+        self.assertIn("--no-guardrails", out)
+
+    def test_cli_serve_parser(self):
+        f = io.StringIO()
+        with patch("sys.stdout", f), patch.object(sys, "argv", ["reflex", "serve", "--help"]):
+            with self.assertRaises(SystemExit) as cm:
+                main()
+            self.assertEqual(cm.exception.code, 0)
+        out = f.getvalue()
+        self.assertIn("--upstream", out)
+        self.assertIn("--cache-ttl", out)
+
 
 if __name__ == "__main__":
     unittest.main()

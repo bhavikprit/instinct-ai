@@ -108,10 +108,16 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # Command: serve (proxy)
-    serve_parser = subparsers.add_parser("serve", help="Start drop-in OpenAI-compatible proxy")
-    serve_parser.add_argument("--host", default="127.0.0.1", help="Host address (default: 127.0.0.1)")
-    serve_parser.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
+    # Command: serve / gateway (Production AI Envoy reverse proxy)
+    for cmd_name in ("serve", "gateway"):
+        p = subparsers.add_parser(cmd_name, help="Start Reflex AI Envoy production reverse proxy gateway")
+        p.add_argument("--host", default="0.0.0.0" if cmd_name == "gateway" else "127.0.0.1", help="Host address")
+        p.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
+        p.add_argument("--upstream", default=os.environ.get("UPSTREAM_OPENAI_URL", "https://api.openai.com/v1"), help="Upstream API base URL")
+        p.add_argument("--cache-ttl", type=float, default=3600.0, help="Semantic cache TTL in seconds (default: 3600)")
+        p.add_argument("--similarity-threshold", type=float, default=0.95, help="Cosine threshold for L2 semantic cache (default: 0.95)")
+        p.add_argument("--no-cache", action="store_true", help="Disable semantic deduplication cache")
+        p.add_argument("--no-guardrails", action="store_true", help="Disable pre-flight security guardrails")
 
     # Command: eval (instant reflex evaluation)
     eval_parser = subparsers.add_parser("eval", help="Evaluate a quick System 1 decision")
@@ -192,11 +198,23 @@ def main():
     elif args.command == "repl":
         from reflex.repl import start_repl
         start_repl(initial_backend=args.backend)
-    elif args.command == "serve":
+    elif args.command in ("serve", "gateway"):
+        from reflex.gateway import ReflexGatewayServer, GatewayConfig
+        cfg = GatewayConfig(
+            host=args.host,
+            port=args.port,
+            upstream_url=getattr(args, "upstream", os.environ.get("UPSTREAM_OPENAI_URL", "https://api.openai.com/v1")),
+            cache_enabled=not getattr(args, "no_cache", False),
+            cache_ttl=getattr(args, "cache_ttl", 3600.0),
+            semantic_threshold=getattr(args, "similarity_threshold", 0.95),
+            guardrails_enabled=not getattr(args, "no_guardrails", False),
+        )
+        server = ReflexGatewayServer(cfg)
         try:
-            start_proxy(host=args.host, port=args.port)
+            server.start(background=False)
         except KeyboardInterrupt:
-            print("\nShutting down Reflex Proxy...")
+            print("\nShutting down Reflex AI Envoy Gateway...")
+            server.stop()
             sys.exit(0)
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
