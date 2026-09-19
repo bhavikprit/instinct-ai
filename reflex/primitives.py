@@ -164,6 +164,7 @@ class DecisionResult:
     risk_bounds: Optional[Dict[str, Any]] = None
     aci: Optional[Dict[str, Any]] = None
     cqr: Optional[Dict[str, Any]] = None
+    calibration: Optional[Dict[str, Any]] = None
     should_escalate: bool = False
 
     def __getitem__(self, key: str) -> PrimitiveType:
@@ -216,6 +217,8 @@ class DecisionResult:
                 k: (v.to_dict() if hasattr(v, "to_dict") else v)
                 for k, v in self.cqr.items()
             }
+        if self.calibration is not None:
+            d["calibration"] = self.calibration
         if self.should_escalate:
             d["should_escalate"] = True
         return d

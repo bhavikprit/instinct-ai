@@ -1316,6 +1316,16 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Seamless `Reflex(cqr=engine).evaluate()` integration with continuous `Score` decisions and automated `result.should_escalate`
    - [x] CLI inspection and heteroscedastic efficiency benchmarking tools (`reflex cqr info`, `reflex cqr benchmark`)
    - [x] 20-test suite verification (`tests/test_cqr.py`) and live heteroscedastic latency estimation demonstration (`examples/36_conformalized_quantile_regression.py`)
+ - [x] **Phase 37: Online Calibrated ECE & Temperature-Scaling Drift Adaptation (`reflex.calib`)**
+   - [x] Guo et al. (ICML 2017) probability calibration and Platt scaling runtime for non-stationary System-1 streams
+   - [x] Streaming Expected Calibration Error (ECE), Maximum Calibration Error (MCE), and Brier score tracking over rolling deque window ($W=100$)
+   - [x] Closed-loop online temperature adaptation in $\log$-space ($s = \log T$) via analytical Negative Log-Likelihood (NLL) gradient descent: $\frac{\partial \mathcal{L}_{\text{NLL}}}{\partial s} = (p_{\text{calib}} - y) \cdot (-z / T)$
+   - [x] Real-time reliability diagrams with binned confidence vs accuracy calibration curves and ASCII terminal visualization
+   - [x] Automated miscalibration alarms (`is_miscalibrated`) triggering System-2 escalation when rolling ECE exceeds threshold
+   - [x] Zero-dependency binary persistence format (`.reflex-calib`, magic `RFCL`, 48-byte structured header, 32-bit CRC32 trailer)
+   - [x] Seamless `Reflex(calibrator=calib_engine)` runtime integration automatically re-scaling `Noul` and `Choice` decisions with `result.calibration`
+   - [x] CLI inspection and online probability calibration benchmarking tools (`reflex calib info`, `reflex calib benchmark`)
+   - [x] 25-test suite verification (`tests/test_calib.py`) and live drift recovery demonstration (`examples/37_online_probability_calibration_drift.py`)
 
 
 ---

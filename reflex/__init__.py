@@ -149,6 +149,11 @@ from reflex.cqr import (
     QuantileInstinctHead,
     ConformalizedQuantileRegressor,
 )
+from reflex.calib import (
+    CalibConfig,
+    CalibrationStatus,
+    OnlineProbabilityCalibrator,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -273,6 +278,9 @@ __all__ = [
     "CQRInterval",
     "QuantileInstinctHead",
     "ConformalizedQuantileRegressor",
+    "CalibConfig",
+    "CalibrationStatus",
+    "OnlineProbabilityCalibrator",
 ]
 
 

@@ -5,7 +5,7 @@ Unified Reflex Client: The Universal System 1 Runtime Interface.
 from __future__ import annotations
 import os
 import time
-from typing import Dict, List, Optional, Union
+from typing import Any, Callable, Collection, Dict, List, Optional, Tuple, Union
 
 from reflex.primitives import PrimitiveType, Noul, Choice, Score, DecisionResult
 from reflex.backends.base import BaseBackend
@@ -74,6 +74,7 @@ class Reflex:
         crc: Optional[Any] = None,
         aci: Optional[Any] = None,
         cqr: Optional[Any] = None,
+        calibrator: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -85,6 +86,7 @@ class Reflex:
         self.crc = crc
         self.aci = aci
         self.cqr = cqr
+        self.calibrator = calibrator
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -477,6 +479,18 @@ class Reflex:
                         result.should_escalate = True
             result.cqr = cqr_intervals
 
+        # 8. Online Probability Calibration & Temperature Drift (Phase 37)
+        if self.calibrator is not None:
+            for k, dec in result.decisions.items():
+                if isinstance(dec, Noul) and dec.probability is not None:
+                    dec.probability = self.calibrator.calibrate_probability(dec.probability)
+                    dec.value = dec.probability >= dec.threshold
+                elif isinstance(dec, Choice) and dec.distribution:
+                    dec.distribution = self.calibrator.calibrate_distribution(dec.distribution)
+            result.calibration = self.calibrator.status().to_dict()
+            if self.calibrator.is_miscalibrated:
+                result.should_escalate = True
+
         return result
 
     def audit_root(self) -> Optional[str]:
@@ -587,10 +601,11 @@ class Reflex:
         key: str,
         true_value: Any,
         prediction_set: Optional[Collection[Any]] = None,
+        raw_prob: Optional[float] = None,
     ) -> None:
         """
-        Records ground truth feedback for online adaptive conformal inference (Phase 35).
-        Updates ACI controller step: err_t = 1 if true_value not in prediction_set else 0.
+        Records ground truth feedback for online adaptive conformal inference (Phase 35)
+        and online probability calibration (Phase 37).
         """
         if self.aci is not None:
             if prediction_set is not None:
@@ -600,6 +615,24 @@ class Reflex:
             else:
                 is_covered = True
             self.aci.update(is_covered=is_covered)
+
+        if self.calibrator is not None and raw_prob is not None:
+            label_float = 1.0 if (true_value is True or true_value == 1 or true_value == 1.0) else 0.0
+            self.calibrator.update(raw_prob=raw_prob, true_label=label_float)
+
+    def record_calibration_feedback(
+        self,
+        raw_prob: float,
+        true_label: Union[bool, int, float],
+    ) -> None:
+        """
+        Records ground truth feedback directly to the online probability calibrator (Phase 37).
+        Updates temperature via online negative log-likelihood (NLL) gradient descent
+        and rolling ECE/MCE/Brier tracking.
+        """
+        if self.calibrator is not None:
+            label_float = 1.0 if (true_label is True or true_label == 1 or true_label == 1.0) else 0.0
+            self.calibrator.update(raw_prob=raw_prob, true_label=label_float)
 
     def sync_fleet(self) -> Dict[str, Any]:
         """Pings all fleet peers and returns cluster connectivity metrics."""

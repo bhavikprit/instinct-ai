@@ -414,6 +414,18 @@ def main():
     cqr_bench.add_argument("--alpha", type=float, default=0.10, help="Significance level (default: 0.10 for 90%% coverage)")
     cqr_bench.add_argument("--samples", type=int, default=1000, help="Number of calibration samples (default: 1000)")
 
+    # Command: calib (Online Probability Calibration - Phase 37)
+    calib_parser = subparsers.add_parser("calib", help="Inspect and benchmark online probability calibration and temperature drift")
+    calib_sub = calib_parser.add_subparsers(dest="calib_action", required=True)
+
+    calib_info = calib_sub.add_parser("info", help="Inspect .reflex-calib model state and reliability diagram")
+    calib_info.add_argument("path", help="Path to .reflex-calib file")
+
+    calib_bench = calib_sub.add_parser("benchmark", help="Benchmark online probability calibration adaptation under overconfident drift")
+    calib_bench.add_argument("--samples", type=int, default=1500, help="Number of streaming inference steps (default: 1500)")
+    calib_bench.add_argument("--lr", type=float, default=0.05, help="Learning rate for temperature scaling (default: 0.05)")
+    calib_bench.add_argument("--bins", type=int, default=10, help="Number of calibration histogram bins (default: 10)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -1511,6 +1523,64 @@ def main():
             print(" " + "-" * 60)
             print(f" {'Constant-Width Conformal':<25} {const_cov:>6.1f}%     {const_mean_w:>8.3f} units    {'✅ (Covered, Rigid)'}")
             print(f" {'Reflex CQR (Adaptive)':<25} {cqr_cov:>6.1f}%     {cqr_mean_w:>8.3f} units    {'✅ (Covered, Heteroscedastic)'}\n")
+            print("=" * 65 + "\n")
+    elif args.command == "calib":
+        from reflex.calib import CalibConfig, OnlineProbabilityCalibrator
+        if args.calib_action == "info":
+            try:
+                calib = OnlineProbabilityCalibrator.load(args.path)
+                st = calib.status()
+                print("\n" + "=" * 65)
+                print("⚡ Reflex Online Probability Calibrator (.reflex-calib)")
+                print("=" * 65)
+                print(f" • Temperature (T)        : {st.temperature:.4f}")
+                print(f" • Rolling ECE            : {st.ece * 100:.2f}% (Threshold: {calib.config.ece_threshold * 100:.1f}%)")
+                print(f" • Rolling MCE            : {st.mce * 100:.2f}%")
+                print(f" • Rolling Brier Score    : {st.brier_score:.4f}")
+                print(f" • Total Samples          : {st.total_samples}")
+                print(f" • Window Size (W)        : {calib.config.window_size}")
+                print(f" • Miscalibrated Alarm    : {'🚨 TRIGGERED (System-2 Escalation)' if st.is_miscalibrated else '✅ Nominal'}\n")
+                print(" Reliability Diagram (Current Window Bins):")
+                calib.print_ascii_reliability_diagram()
+                print("=" * 65 + "\n")
+            except Exception as e:
+                print(f"❌ Error inspecting Calib model: {e}")
+                sys.exit(1)
+        elif args.calib_action == "benchmark":
+            import random
+            print("\n" + "=" * 65)
+            print("🚀 Reflex Online Probability Calibration Benchmark")
+            print("=" * 65)
+            rng = random.Random(42)
+            config = CalibConfig(learning_rate=args.lr, num_bins=args.bins, window_size=100)
+            calib = OnlineProbabilityCalibrator(config=config)
+
+            # Simulate an overconfident raw classifier
+            raw_brier_sum = 0.0
+            for step in range(args.samples):
+                p_true = rng.uniform(0.1, 0.9)
+                y = 1.0 if rng.random() < p_true else 0.0
+                # Overconfident distortion: push towards 0 or 1
+                if p_true >= 0.5:
+                    p_raw = min(0.99, p_true + 0.25 * (1.0 - p_true))
+                else:
+                    p_raw = max(0.01, p_true - 0.25 * p_true)
+
+                raw_brier_sum += (p_raw - y) ** 2
+                calib.update(raw_prob=p_raw, true_label=y)
+
+            st = calib.status()
+            raw_brier = raw_brier_sum / float(args.samples)
+
+            print(f" • Samples Streamed       : {args.samples}")
+            print(f" • Adapted Temperature (T): {st.temperature:.4f} (Softening overconfidence)")
+            print(f" • Final Rolling ECE      : {st.ece * 100:.2f}%")
+            print(f" • Final Rolling MCE      : {st.mce * 100:.2f}%")
+            print(f" • Raw Brier Score        : {raw_brier:.4f}")
+            print(f" • Calibrated Brier Score : {st.brier_score:.4f}")
+            print(f" • Miscalibration Alarm   : {'🚨 Miscalibrated' if st.is_miscalibrated else '✅ Well-Calibrated'}\n")
+            print(" Reliability Diagram:")
+            calib.print_ascii_reliability_diagram()
             print("=" * 65 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
