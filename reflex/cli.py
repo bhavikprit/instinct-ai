@@ -377,6 +377,18 @@ def main():
     conformal_bench.add_argument("--samples", type=int, default=1000, help="Number of test samples (default: 1000)")
     conformal_bench.add_argument("--mondrian", action="store_true", default=True, help="Use Mondrian class-conditional calibration")
 
+    # Command: crc (Conformal Risk Control - Phase 34)
+    crc_parser = subparsers.add_parser("crc", help="Inspect and benchmark Conformal Risk Control bounds (E[L] <= alpha)")
+    crc_sub = crc_parser.add_subparsers(dest="crc_action", required=True)
+
+    crc_info = crc_sub.add_parser("info", help="Inspect .reflex-crc calibration model")
+    crc_info.add_argument("path", help="Path to .reflex-crc file")
+
+    crc_bench = crc_sub.add_parser("benchmark", help="Benchmark empirical loss vs nominal risk budget")
+    crc_bench.add_argument("--alpha", type=float, default=0.05, help="Risk budget (default: 0.05 for <= 5%% expected loss)")
+    crc_bench.add_argument("--samples", type=int, default=1000, help="Number of test samples (default: 1000)")
+    crc_bench.add_argument("--loss-type", choices=["miscoverage", "excess_error"], default="miscoverage", help="Loss function type")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -1256,6 +1268,67 @@ def main():
             print(f" • Singleton Ratio   : {metrics['singleton_ratio'] * 100:.1f}% (Instant System 1 Shortcut)")
             print(f" • Escalation Ratio  : {metrics['ambiguous_ratio'] * 100:.1f}% (Certified System 2 Escalation)")
             print(f" • Anomaly / Empty   : {metrics['empty_ratio'] * 100:.1f}%\n")
+            print("=" * 65 + "\n")
+    elif args.command == "crc":
+        from reflex.crc import CRCConfig, ConformalRiskController
+        if args.crc_action == "info":
+            if not os.path.exists(args.path):
+                print(f"❌ File not found: {args.path}")
+                sys.exit(1)
+            try:
+                controller = ConformalRiskController.load(args.path)
+                print("\n" + "=" * 60)
+                print("⚡ Reflex Conformal Risk Controller (.reflex-crc)")
+                print("=" * 60)
+                print(f" • File Path          : {args.path}")
+                print(f" • File Size          : {os.path.getsize(args.path):,} bytes")
+                print(f" • Risk Budget Alpha  : {controller.config.alpha:.4f}")
+                print(f" • Max Loss Bound B   : {controller.config.max_loss:.2f}")
+                print(f" • Loss Function Type : {controller.config.loss_type}")
+                print(f" • Calibrated Status  : {'YES ✅' if controller.is_calibrated else 'NO ⚠️'}")
+                print(f" • Score Cal Samples  : {len(controller.score_cal_samples)}")
+                print(f" • Calibrated Lambda  : {controller.score_lambda}")
+                print(f" • Noul Cal Samples   : {len(controller.noul_cal_samples)}")
+                print(f" • Decision Threshold : {controller.decision_threshold}")
+                print("=" * 60 + "\n")
+            except Exception as e:
+                print(f"❌ Error inspecting CRC model: {e}")
+                sys.exit(1)
+        elif args.crc_action == "benchmark":
+            import random
+            print("\n" + "=" * 65)
+            print("⚡ Reflex Conformal Risk Control Benchmark")
+            print("=" * 65)
+            print(f" • Nominal Risk Budget : {args.alpha * 100:.1f}% (alpha={args.alpha})")
+            print(f" • Calibration Size    : 500 samples")
+            print(f" • Test Set Size       : {args.samples} samples")
+            print(f" • Loss Function       : {args.loss_type}\n")
+
+            rng = random.Random(42)
+            cfg = CRCConfig(alpha=args.alpha, loss_type=args.loss_type, min_calibration_samples=20)
+            controller = ConformalRiskController(cfg)
+
+            for _ in range(500):
+                true_s = rng.uniform(1.0, 10.0)
+                noise = rng.gauss(0, 0.7)
+                pred_s = max(1.0, min(10.0, true_s + noise))
+                controller.add_calibration_score(pred_s, true_s, 1.0, 10.0)
+
+            controller.calibrate()
+
+            test_samples = []
+            for _ in range(args.samples):
+                true_s = rng.uniform(1.0, 10.0)
+                noise = rng.gauss(0, 0.7)
+                pred_s = max(1.0, min(10.0, true_s + noise))
+                test_samples.append((pred_s, true_s, 1.0, 10.0))
+
+            metrics = controller.evaluate_score_risk(test_samples)
+            print(f" • Nominal Risk Budget : {metrics['nominal_risk'] * 100:.1f}%")
+            print(f" • Empirical Test Risk : {metrics['empirical_risk'] * 100:.1f}% "
+                  f"{'✅ (PASSED RISK BOUND)' if metrics['empirical_risk'] <= metrics['nominal_risk'] + 0.01 else '⚠️'}")
+            print(f" • Calibrated Margin   : ±{metrics['margin']:.3f} units")
+            print(f" • Sample Count        : {metrics['sample_count']}\n")
             print("=" * 65 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard

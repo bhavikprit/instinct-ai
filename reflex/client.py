@@ -71,6 +71,7 @@ class Reflex:
         compiled_instinct: Optional[CompiledInstinct] = None,
         ensemble: Optional[Union[str, InstinctEnsemble]] = None,
         conformal: Optional[Any] = None,
+        crc: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -79,6 +80,7 @@ class Reflex:
         self.model_path = model_path
         self.tracer = tracer
         self.conformal = conformal
+        self.crc = crc
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -426,6 +428,22 @@ class Reflex:
                         has_escalation = True
             result.conformal = conformal_results
             result.should_escalate = has_escalation
+
+        # 6. Conformal Risk Control (CRC) & Expected Loss Bounding (Phase 34)
+        if self.crc is not None and getattr(self.crc, "is_calibrated", False):
+            risk_bounds = {}
+            for k, dec in result.decisions.items():
+                if isinstance(dec, Score) and getattr(self.crc, "score_lambda", None) is not None:
+                    s_bound = self.crc.predict_score(dec)
+                    risk_bounds[k] = s_bound
+                    if s_bound.should_escalate:
+                        result.should_escalate = True
+                elif isinstance(dec, Noul) and getattr(self.crc, "decision_threshold", None) is not None:
+                    d_bound = self.crc.predict_decision_threshold(dec)
+                    risk_bounds[k] = d_bound
+                    if d_bound.should_escalate:
+                        result.should_escalate = True
+            result.risk_bounds = risk_bounds
 
         return result
 

@@ -1286,6 +1286,16 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Deep `Reflex(conformal=cp).evaluate()` integration with automatic `res.should_escalate`
    - [x] CLI inspection and coverage benchmarking tools (`reflex conformal info`, `reflex conformal benchmark`)
    - [x] 17-test suite verification (`tests/test_conformal.py`) and live financial safety demonstration (`examples/33_conformal_prediction_safety_bounds.py`)
+ - [x] **Phase 34: Conformal Risk Control (CRC) & Expected Loss Bounding (`reflex.crc`)**
+   - [x] Generalizes statistical safety guarantees to continuous evaluations and bounded loss functions: $\mathbb{E}[L(f_{\hat{\lambda}}(X), Y)] \le \alpha$
+   - [x] Finite-sample empirical risk upper bound adjustment: $\hat{\lambda} = \inf \{ \lambda : \frac{n}{n+1} \hat{R}(\lambda) + \frac{B}{n+1} \le \alpha \}$
+   - [x] Certified prediction intervals for continuous `Score` primitives ($[s - \hat{\lambda}, s + \hat{\lambda}]$) clamped to rubric bounds $[y_{\min}, y_{\max}]$
+   - [x] Tolerance-based epistemic escalation: triggers System-2 escalation if uncertainty margin $\hat{\lambda} > \text{max\_margin\_tolerance}$
+   - [x] Cost-sensitive binary decision threshold optimization (e.g. bounding False Negative Risk $\le 2\%$)
+   - [x] Zero-dependency binary serialization format (`.reflex-crc`, magic `RFCR`, 40-byte structured header with 64-bit IEEE floats, 32-bit CRC32 trailer)
+   - [x] Deep `Reflex(crc=controller).evaluate()` integration attaching `res.risk_bounds` and managing automated escalation
+   - [x] CLI inspection and risk benchmarking tools (`reflex crc info`, `reflex crc benchmark`)
+   - [x] 18-test suite verification (`tests/test_crc.py`) and live rubric safety demonstration (`examples/34_conformal_risk_control.py`)
 
 
 ---

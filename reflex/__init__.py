@@ -132,6 +132,12 @@ from reflex.conformal import (
     ConformalNoulResult,
     ConformalChoiceResult,
 )
+from reflex.crc import (
+    CRCConfig,
+    ConformalRiskController,
+    ScoreRiskBound,
+    DecisionRiskBound,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -245,6 +251,10 @@ __all__ = [
     "ConformalPredictor",
     "ConformalNoulResult",
     "ConformalChoiceResult",
+    "CRCConfig",
+    "ConformalRiskController",
+    "ScoreRiskBound",
+    "DecisionRiskBound",
 ]
 
 

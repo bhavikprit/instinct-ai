@@ -161,6 +161,7 @@ class DecisionResult:
     cost_usd: float = 0.0
     cached: bool = False
     conformal: Optional[Dict[str, Any]] = None
+    risk_bounds: Optional[Dict[str, Any]] = None
     should_escalate: bool = False
 
     def __getitem__(self, key: str) -> PrimitiveType:
@@ -177,6 +178,12 @@ class DecisionResult:
         if isinstance(val, Choice):
             return val
         raise KeyError(f"Key '{key}' is not a Choice primitive")
+
+    def get_score(self, key: str) -> Score:
+        val = self.decisions.get(key)
+        if isinstance(val, Score):
+            return val
+        raise KeyError(f"Key '{key}' is not a Score primitive")
 
     def to_dict(self) -> Dict[str, Any]:
         return {
