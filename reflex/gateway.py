@@ -319,7 +319,26 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
             return
 
         messages = req_json.get("messages", [])
-        combined_prompt = " ".join(m.get("content", "") for m in messages if isinstance(m.get("content"), str))
+        prompt_parts = []
+        for m in messages:
+            c = m.get("content", "")
+            if isinstance(c, str):
+                prompt_parts.append(c)
+            elif isinstance(c, list):
+                for part in c:
+                    if isinstance(part, dict):
+                        if part.get("type") == "text":
+                            prompt_parts.append(part.get("text", ""))
+                        elif part.get("type") == "image_url":
+                            img_url = part.get("image_url", {}).get("url", "")
+                            if img_url:
+                                try:
+                                    from reflex.vision import PerceptualHasher
+                                    h_hex = PerceptualHasher.dhash_hex(img_url)
+                                    prompt_parts.append(f"[image:dhash={h_hex}]")
+                                except Exception:
+                                    prompt_parts.append("[image:unknown]")
+        combined_prompt = " ".join(prompt_parts)
         tokens_est = max(1, len(combined_prompt.split()))
         model = req_json.get("model", "gpt-4o")
 

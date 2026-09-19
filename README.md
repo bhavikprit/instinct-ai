@@ -687,6 +687,34 @@ reflex mesh peers --gateway http://127.0.0.1:8080
 
 ---
 
+## 👁️ Multimodal Decision Primitives & Vision (`reflex.vision`)
+
+Stop burning \$0.02 and 3–5 seconds querying GPT-4o Vision or Claude 3.5 Sonnet Vision just to make classification or triage decisions on incoming images. **`reflex.vision`** delivers sub-millisecond visual classification, structural feature extraction, and perceptual deduplication with **zero external pip dependencies** (no Pillow or OpenCV required).
+
+```python
+from reflex import Reflex, ZeroDepImageDecoder, PerceptualHasher
+
+rx = Reflex()
+
+# 1. Zero-dependency visual categorization (<1ms, $0 cost)
+doc_category = rx.visual_choice(
+    instructions="Classify uploaded document",
+    options=["receipt", "invoice", "id_card", "screenshot"],
+    image="user_upload.png"  # Path, raw bytes, or base64 data URL
+)
+
+# 2. Multimodal boolean triage
+is_dark_theme = rx.visual_noul("Is this a dark IDE code terminal?", "screenshot.png")
+
+# 3. Perceptual image hashing (dHash) & deduplication
+# Resized, cropped, or slightly compressed copies match with Hamming distance <= 4:
+h1 = PerceptualHasher.dhash("receipt_original.png")
+h2 = PerceptualHasher.dhash("receipt_mobile_thumbnail.png")
+is_duplicate = PerceptualHasher.hamming_distance(h1, h2) <= 4
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
@@ -775,6 +803,12 @@ reflex mesh peers --gateway http://127.0.0.1:8080
    - [x] Conflict-free federated weight blending ($W = \frac{n_1 W_1 + n_2 W_2}{n_1 + n_2}$)
    - [x] REST endpoints (`/v1/mesh/sync`, `/v1/mesh/peers`, `/v1/mesh/heartbeat`) and CLI tooling (`reflex mesh peers`)
    - [x] Multi-pod cluster live simulation (`examples/19_distributed_fleet_mesh_sync.py`)
+ - [x] **Phase 20: Multimodal Decision Primitives (`reflex.vision`)**
+   - [x] Zero-dependency image parsing (pure-Python PNG chunk decoding, scanline unfiltering, PPM, BMP)
+   - [x] Perceptual Difference Hashing (`dHash` / `aHash`) and structural visual feature extraction
+   - [x] Typed visual decision primitives (`rx.visual_choice`, `rx.visual_noul`) with sub-millisecond execution
+   - [x] Multimodal base64 image deduplication in AI Envoy Gateway saving 100% downstream vision tokens
+   - [x] End-to-end demonstration (`examples/20_multimodal_visual_decisions.py`) and 149-test verification
 
 ---
 

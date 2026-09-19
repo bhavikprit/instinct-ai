@@ -28,6 +28,13 @@ from reflex.backends.c_engine import NativeCEngine
 from reflex.proxy import start_proxy
 from reflex.gateway import ReflexGatewayServer, GatewayConfig, GatewayMetrics
 from reflex.mesh import InstinctMeshNode, MeshConfig, MeshPeerState
+from reflex.vision import (
+    VisualNoul,
+    VisualChoice,
+    PerceptualHasher,
+    ZeroDepImageDecoder,
+    RawImage,
+)
 from reflex.flow import (
     StateGraph,
     Flow,
@@ -76,6 +83,11 @@ __all__ = [
     "InstinctMeshNode",
     "MeshConfig",
     "MeshPeerState",
+    "VisualNoul",
+    "VisualChoice",
+    "PerceptualHasher",
+    "ZeroDepImageDecoder",
+    "RawImage",
     "StateGraph",
     "Flow",
     "START",

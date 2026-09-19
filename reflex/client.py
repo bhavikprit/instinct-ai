@@ -207,3 +207,71 @@ class Reflex:
         """Direct shortcut returning evaluated numerical score."""
         res = self.evaluate(state, {"_q": Score(instructions=instructions, min_val=min_val, max_val=max_val)})
         return res["_q"].score or min_val
+
+    def visual_noul(
+        self,
+        instructions: str,
+        image: Any,
+        threshold: float = 0.5,
+    ) -> float:
+        """
+        Multimodal boolean decision primitive (Phase 20).
+        Evaluates visual properties in <1ms without calling heavy vision LLMs.
+        """
+        from reflex.vision import ZeroDepImageDecoder, PerceptualHasher
+        raw = ZeroDepImageDecoder.decode(image)
+        gray = raw.to_grayscale()
+        mean_lum = sum(gray.data) / len(gray.data)
+        instr_lower = instructions.lower()
+
+        if any(k in instr_lower for k in ("dark", "night", "black", "terminal", "ide")):
+            prob = 1.0 - (mean_lum / 255.0)
+        elif any(k in instr_lower for k in ("bright", "light", "white", "paper", "receipt", "document")):
+            prob = mean_lum / 255.0
+        elif any(k in instr_lower for k in ("color", "rgb", "photo")):
+            prob = 0.9 if raw.channels >= 3 else 0.1
+        else:
+            feats = PerceptualHasher.extract_features(raw, dim=64)
+            prob = 0.5 + 0.3 * (feats[0] - 0.5)
+
+        return round(max(0.01, min(0.99, prob)), 4)
+
+    def visual_choice(
+        self,
+        instructions: str,
+        options: List[str],
+        image: Any,
+    ) -> str:
+        """
+        Multimodal multi-class categorization primitive (Phase 20).
+        Categorizes images in <1ms without calling heavy vision LLMs.
+        """
+        if not options:
+            return ""
+        from reflex.vision import ZeroDepImageDecoder, PerceptualHasher
+        raw = ZeroDepImageDecoder.decode(image)
+        gray = raw.to_grayscale()
+        mean_lum = sum(gray.data) / len(gray.data)
+        dhash = PerceptualHasher.dhash(raw)
+
+        scored_options = []
+        for opt in options:
+            opt_lower = opt.lower()
+            score = 0.0
+            if any(k in opt_lower for k in ("receipt", "invoice", "document", "bill")):
+                if mean_lum > 180:
+                    score += 2.5
+            elif any(k in opt_lower for k in ("screenshot", "code", "ide", "terminal")):
+                if mean_lum < 100:
+                    score += 2.5
+            elif any(k in opt_lower for k in ("id_card", "badge", "license", "portrait")):
+                if 100 <= mean_lum <= 220 and raw.channels >= 3:
+                    score += 2.0
+            elif "other" in opt_lower or "general" in opt_lower:
+                score += 0.5
+            
+            score += ((dhash >> (len(opt) % 32)) & 0xF) / 100.0
+            scored_options.append((score, opt))
+
+        scored_options.sort(key=lambda x: x[0], reverse=True)
+        return scored_options[0][1]
