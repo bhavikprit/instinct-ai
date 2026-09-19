@@ -27,6 +27,7 @@ from reflex.guardrails import GuardrailSuite
 from reflex.primitives import Noul, Choice
 from reflex.mesh import InstinctMeshNode, MeshConfig
 from reflex.shadow import DecisionShadowRouter, ShadowConfig, ShadowStage
+from reflex.speculative import SpeculativeEngine
 
 
 @dataclass
@@ -54,6 +55,9 @@ class GatewayConfig:
     canary_auto_promote: bool = False
     canary_auto_rollback: bool = True
     canary_shadow_traffic_pct: float = 100.0
+    speculative_enabled: bool = False
+    speculative_threshold: float = 0.75
+
 
 
 
@@ -237,6 +241,7 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
     rx: Reflex = Reflex()
     mesh_node: Optional[InstinctMeshNode] = None
     shadow_router: Optional[DecisionShadowRouter] = None
+    speculative_engine: Optional[SpeculativeEngine] = None
 
     @classmethod
     def initialize(cls, config: GatewayConfig):
@@ -283,6 +288,14 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         else:
             cls.shadow_router = None
 
+        if config.speculative_enabled:
+            cls.speculative_engine = SpeculativeEngine(
+                reflex_client=cls.rx,
+                confidence_threshold=config.speculative_threshold,
+            )
+        else:
+            cls.speculative_engine = None
+
     def do_GET(self):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/healthz", "/health"):
@@ -294,7 +307,13 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(200, self.shadow_router.stats())
             else:
                 self._send_json(400, {"error": "Canary/Shadowing is not enabled on this gateway"})
+        elif norm_path in ("/v1/speculative/stats", "/speculative/stats"):
+            if self.speculative_engine is not None:
+                self._send_json(200, self.speculative_engine.stats())
+            else:
+                self._send_json(400, {"error": "Speculative engine is not enabled on this gateway"})
         elif norm_path in ("/v1/mesh/peers", "/mesh/peers"):
+
             if self.mesh_node is not None:
                 status, res = self.mesh_node.handle_peers_request()
                 self._send_json(status, res)
@@ -653,6 +672,10 @@ class ReflexGatewayServer:
     def shadow_router(self) -> Optional[DecisionShadowRouter]:
         return self.handler_class.shadow_router
 
+    @property
+    def speculative_engine(self) -> Optional[SpeculativeEngine]:
+        return self.handler_class.speculative_engine
+
     def start(self, background: bool = False):
         """Start the gateway server."""
         self.handler_class.initialize(self.config)
@@ -673,6 +696,8 @@ class ReflexGatewayServer:
                 print(f"   • Instinct Mesh    : Connected ({len(self.config.mesh_peers)} peers)")
             if self.handler_class.shadow_router is not None:
                 print(f"   • Canary/Shadow    : Active (Stage: {self.handler_class.shadow_router.config.stage.value})")
+            if self.handler_class.speculative_engine is not None:
+                print(f"   • Speculative Mode : Active (Threshold: {self.config.speculative_threshold:.2f})")
             try:
                 self.server.serve_forever()
             except KeyboardInterrupt:
@@ -684,10 +709,13 @@ class ReflexGatewayServer:
             self.handler_class.mesh_node.stop()
         if self.handler_class.shadow_router is not None:
             self.handler_class.shadow_router.shutdown(wait=False)
+        if self.handler_class.speculative_engine is not None:
+            self.handler_class.speculative_engine.shutdown(wait=False)
         if self.server is not None:
             self.server.shutdown()
             self.server.server_close()
             self.server = None
+
         if self.thread is not None and self.thread.is_alive():
             self.thread.join(timeout=2.0)
             self.thread = None

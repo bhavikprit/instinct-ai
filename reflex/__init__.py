@@ -53,6 +53,13 @@ from reflex.shadow import (
     DivergenceTracker,
     DecisionShadowRouter,
 )
+from reflex.speculative import (
+    SpeculativeEngine,
+    SpeculativeAction,
+    SpeculativeSession,
+    SpeculativeStatus,
+    SpeculativeMetrics,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -109,6 +116,12 @@ __all__ = [
     "ShadowEvaluationRecord",
     "DivergenceTracker",
     "DecisionShadowRouter",
+    "SpeculativeEngine",
+    "SpeculativeAction",
+    "SpeculativeSession",
+    "SpeculativeStatus",
+    "SpeculativeMetrics",
 ]
+
 
 

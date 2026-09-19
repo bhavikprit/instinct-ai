@@ -868,6 +868,14 @@ reflex canary rollback --gateway http://127.0.0.1:8080
    - [x] Autonomous instant safety rollback upon divergence or error spikes
    - [x] AI Envoy Gateway REST endpoints (`/v1/canary/stats`, `/v1/canary/promote`, `/v1/canary/rollback`) and CLI tooling
    - [x] End-to-end demonstration (`examples/21_decision_shadowing_and_canary.py`) and 161-test verification
+ - [x] **Phase 22: Speculative Decision Routing & Parallel Pre-Fetch (`reflex.speculative`)**
+   - [x] Sub-millisecond System-1 intention prediction (<0.1ms) operating concurrently with LLM token generation
+   - [x] Parallel idempotent pre-fetching in background daemon thread pool eliminating tool execution latency to 0ms
+   - [x] Non-blocking adaptive resolution supporting both synchronous (`session.resolve`) and asynchronous (`session.resolve_async`) execution
+   - [x] Side-effect mutation safety guards preventing non-idempotent actions from speculative pre-fetch
+   - [x] Automatic abort and context-manager cleanup on decision miss or abandoned turns
+   - [x] Thread-safe telemetry tracking hit rates, latency saved, and aborts (`reflex speculative stats` & `GET /v1/speculative/stats`)
+   - [x] End-to-end interactive demonstration (`examples/22_speculative_decision_prefetch.py`) and 169-test suite verification
 
 
 ---

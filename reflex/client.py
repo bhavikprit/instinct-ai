@@ -19,6 +19,7 @@ from reflex.learning import SelfTuningInstinctHead
 from reflex.feedback import FeedbackCollector
 from reflex.mesh import InstinctMeshNode, MeshConfig
 from reflex.shadow import DecisionShadowRouter, ShadowConfig, ShadowStage
+from reflex.speculative import SpeculativeEngine, SpeculativeSession, SpeculativeAction
 
 
 class Reflex:
@@ -53,8 +54,11 @@ class Reflex:
         shadow_router: Optional[DecisionShadowRouter] = None,
         shadow_challenger: Optional[Union[Reflex, BaseBackend, str]] = None,
         shadow_config: Optional[ShadowConfig] = None,
+        speculative: bool = False,
+        speculative_engine: Optional[SpeculativeEngine] = None,
         **backend_kwargs,
     ):
+
         self.policy = policy
         self.api_key = api_key
         self.model_path = model_path
@@ -135,6 +139,14 @@ class Reflex:
         else:
             self.shadow_router = None
 
+        # Speculative execution setup (Phase 22)
+        if speculative_engine is not None:
+            self.speculative_engine: Optional[SpeculativeEngine] = speculative_engine
+        elif speculative:
+            self.speculative_engine = SpeculativeEngine(reflex_client=self)
+        else:
+            self.speculative_engine = None
+
     def _evaluate_direct(self, state: str, questions: Dict[str, PrimitiveType]) -> DecisionResult:
         """Internal direct evaluation bypassing shadow router (used by champion/challenger)."""
         if self.cache is not None:
@@ -187,6 +199,48 @@ class Reflex:
         if self.shadow_router is not None:
             return self.shadow_router.stats()
         return None
+
+    def register_speculative_action(
+        self,
+        name: str,
+        handler: Callable[..., Any],
+        description: str = "",
+        idempotent: bool = True,
+        extractor: Optional[Callable[[str], Dict[str, Any]]] = None,
+        timeout: float = 5.0,
+    ) -> None:
+        """Registers a tool eligible for speculative parallel pre-fetching (Phase 22)."""
+        if self.speculative_engine is None:
+            self.speculative_engine = SpeculativeEngine(reflex_client=self)
+        self.speculative_engine.register_action(
+            name=name,
+            handler=handler,
+            description=description,
+            idempotent=idempotent,
+            extractor=extractor,
+            timeout=timeout,
+        )
+
+    def speculate(
+        self,
+        state: str,
+        actions: Optional[List[str]] = None,
+        override_action: Optional[str] = None,
+    ) -> SpeculativeSession:
+        """
+        Sub-millisecond speculative decision routing and parallel pre-fetch (Phase 22).
+        Predicts target tool in <0.1ms and launches idempotent pre-fetch in background.
+        """
+        if self.speculative_engine is None:
+            self.speculative_engine = SpeculativeEngine(reflex_client=self)
+        return self.speculative_engine.speculate(state, action_names=actions, override_action=override_action)
+
+    def speculative_stats(self) -> Optional[Dict[str, Any]]:
+        """Returns speculative execution hit rate and time saved metrics."""
+        if self.speculative_engine is not None:
+            return self.speculative_engine.stats()
+        return None
+
 
 
     def teach(

@@ -127,6 +127,8 @@ def main():
         p.add_argument("--canary-challenger", default="semantic", help="Challenger backend model (default: semantic)")
         p.add_argument("--canary-threshold", type=float, default=0.90, help="Minimum agreement threshold for promotion (default: 0.90)")
         p.add_argument("--canary-auto-promote", action="store_true", help="Enable autonomous progressive canary promotion")
+        p.add_argument("--speculative", action="store_true", help="Enable speculative decision routing & parallel pre-fetch")
+        p.add_argument("--speculative-threshold", type=float, default=0.75, help="Confidence threshold for speculative pre-fetch (default: 0.75)")
 
     # Command: canary (Autonomous canary deployment & decision shadowing)
     canary_parser = subparsers.add_parser("canary", help="Manage and inspect autonomous canary deployments")
@@ -146,6 +148,13 @@ def main():
     canary_stage_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
     canary_stage_p.add_argument("--stage", choices=["OBSERVATION", "CANARY_10", "CANARY_25", "CANARY_50", "PROMOTED", "ROLLED_BACK"], help="Canary stage name")
     canary_stage_p.add_argument("--pct", type=float, help="Canary traffic percentage [0.0 - 100.0]")
+
+    # Command: speculative (Speculative execution & parallel pre-fetch inspection)
+    spec_parser = subparsers.add_parser("speculative", help="Inspect speculative decision routing & pre-fetch metrics")
+    spec_sub = spec_parser.add_subparsers(dest="speculative_action", help="Speculative action: stats")
+    spec_stats_p = spec_sub.add_parser("stats", help="Query live speculative hit rates and latency savings")
+    spec_stats_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
+
 
 
     # Command: mesh (Cluster inspection and sync)
@@ -255,6 +264,8 @@ def main():
             canary_challenger_backend=getattr(args, "canary_challenger", "semantic"),
             canary_concordance_threshold=getattr(args, "canary_threshold", 0.90),
             canary_auto_promote=getattr(args, "canary_auto_promote", False),
+            speculative_enabled=getattr(args, "speculative", False),
+            speculative_threshold=getattr(args, "speculative_threshold", 0.75),
         )
         server = ReflexGatewayServer(cfg)
         try:
@@ -263,7 +274,34 @@ def main():
             print("\nShutting down Reflex AI Envoy Gateway...")
             server.stop()
             sys.exit(0)
+    elif args.command == "speculative":
+        import urllib.request
+        import urllib.error
+        gateway = getattr(args, "gateway", "http://127.0.0.1:8080").rstrip("/")
+        try:
+            req = urllib.request.Request(f"{gateway}/v1/speculative/stats")
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                print("\n🔮 Reflex Speculative Decision Execution & Pre-Fetch Status:")
+                print(f" • Total Requests       : {data.get('total_requests', 0)}")
+                print(f" • Speculations Launched: {data.get('speculations_launched', 0)}")
+                print(f" • Speculative Hits     : {data.get('speculative_hits', 0)}")
+                print(f" • Speculative Misses   : {data.get('speculative_misses', 0)}")
+                print(f" • Speculative Skips    : {data.get('speculative_skips', 0)}")
+                print(f" • Speculative Aborts   : {data.get('speculative_aborts', 0)}")
+                print(f" • Speculative Hit Rate : {data.get('hit_rate', 0.0):.1%}")
+                print(f" • Total Latency Saved  : {data.get('total_latency_saved_ms', 0.0):.1f}ms")
+                print(f" • Avg Saved per Hit    : {data.get('average_latency_saved_ms', 0.0):.1f}ms")
+                action_hits = data.get("action_hits", {})
+                if action_hits:
+                    print(f" • Pre-Fetched Actions  :")
+                    for act, hits in action_hits.items():
+                        print(f"   - {act}: {hits} hits")
+                print()
+        except Exception as e:
+            print(f"\n❌ Error querying speculative gateway: {e}\n")
     elif args.command == "canary":
+
         import urllib.request
         import urllib.error
         gateway = getattr(args, "gateway", "http://127.0.0.1:8080").rstrip("/")
