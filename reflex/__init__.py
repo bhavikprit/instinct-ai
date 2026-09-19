@@ -126,6 +126,12 @@ from reflex.ivfpq import (
     IVFPQIndex,
     IVFPQSearchResult,
 )
+from reflex.conformal import (
+    ConformalConfig,
+    ConformalPredictor,
+    ConformalNoulResult,
+    ConformalChoiceResult,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -235,6 +241,10 @@ __all__ = [
     "IVFPQConfig",
     "IVFPQIndex",
     "IVFPQSearchResult",
+    "ConformalConfig",
+    "ConformalPredictor",
+    "ConformalNoulResult",
+    "ConformalChoiceResult",
 ]
 
 

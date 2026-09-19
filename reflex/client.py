@@ -70,6 +70,7 @@ class Reflex:
         audit_log: Optional[Union[str, MerkleAuditLog]] = None,
         compiled_instinct: Optional[CompiledInstinct] = None,
         ensemble: Optional[Union[str, InstinctEnsemble]] = None,
+        conformal: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -77,6 +78,7 @@ class Reflex:
         self.api_key = api_key
         self.model_path = model_path
         self.tracer = tracer
+        self.conformal = conformal
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -406,6 +408,24 @@ class Reflex:
                 metadata=context or {},
                 policy_verdict=final_verdict or {"action": "ALLOW", "allowed": True},
             )
+
+        # 5. Conformal Prediction Epistemic Bounds & Calibration (Phase 33)
+        if self.conformal is not None and getattr(self.conformal, "is_calibrated", False):
+            conformal_results = {}
+            has_escalation = False
+            for k, dec in result.decisions.items():
+                if isinstance(dec, Noul):
+                    c_res = self.conformal.predict_noul(dec)
+                    conformal_results[k] = c_res
+                    if c_res.should_escalate:
+                        has_escalation = True
+                elif isinstance(dec, Choice):
+                    c_res = self.conformal.predict_choice(dec)
+                    conformal_results[k] = c_res
+                    if c_res.should_escalate:
+                        has_escalation = True
+            result.conformal = conformal_results
+            result.should_escalate = has_escalation
 
         return result
 

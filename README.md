@@ -1276,6 +1276,16 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Seamless `InstinctCache` integration (`use_ivfpq=True`) for ultra-high-capacity memory
    - [x] CLI inspection and benchmarking tools (`reflex ivfpq info`, `reflex ivfpq benchmark`)
    - [x] 16-test suite verification (`tests/test_ivfpq.py`) and 10,000-vector live demonstration (`examples/32_billion_scale_ivf_pq_memory.py`)
+ - [x] **Phase 33: Distribution-Free Conformal Prediction & Calibration Bounds (`reflex.conformal`)**
+   - [x] Finite-sample mathematical safety guarantees: $\mathbb{P}(Y \in C(X)) \ge 1 - \alpha$ across arbitrary distributions and model backends
+   - [x] Epistemic prediction sets: singletons ($|C(X)|=1$) enable instant safe System-1 execution (<0.1ms, $0 cost); multi-label ($|C(X)|>1$) and empty ($C(X)=\emptyset$) sets trigger certified System-2 escalation
+   - [x] Class-conditional Mondrian conformal prediction for rare class balance (e.g. high-stakes fraud detection)
+   - [x] Adaptive Prediction Sets (APS) for multi-class `Choice` routing with cumulative probability guarantees
+   - [x] Exact finite-sample conformal p-values for all candidate hypotheses
+   - [x] Zero-dependency binary persistence format (`.reflex-conformal`, magic `RFCF`, 64-bit IEEE float header, 32-bit CRC32 integrity trailer)
+   - [x] Deep `Reflex(conformal=cp).evaluate()` integration with automatic `res.should_escalate`
+   - [x] CLI inspection and coverage benchmarking tools (`reflex conformal info`, `reflex conformal benchmark`)
+   - [x] 17-test suite verification (`tests/test_conformal.py`) and live financial safety demonstration (`examples/33_conformal_prediction_safety_bounds.py`)
 
 
 ---

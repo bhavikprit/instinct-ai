@@ -365,6 +365,18 @@ def main():
     ivfpq_bench.add_argument("--queries", type=int, default=100, help="Number of benchmark search queries (default: 100)")
     ivfpq_bench.add_argument("--k", type=int, default=5, help="Top-K neighbors to retrieve (default: 5)")
 
+    # Command: conformal (Distribution-Free Conformal Prediction - Phase 33)
+    conformal_parser = subparsers.add_parser("conformal", help="Inspect and benchmark Conformal Prediction bounds and coverage guarantees")
+    conformal_sub = conformal_parser.add_subparsers(dest="conformal_action", required=True)
+
+    conformal_info = conformal_sub.add_parser("info", help="Inspect .reflex-conformal calibration model")
+    conformal_info.add_argument("path", help="Path to .reflex-conformal file")
+
+    conformal_bench = conformal_sub.add_parser("benchmark", help="Benchmark empirical conformal coverage vs nominal guarantees")
+    conformal_bench.add_argument("--alpha", type=float, default=0.05, help="Significance level (default: 0.05 for 95%% coverage)")
+    conformal_bench.add_argument("--samples", type=int, default=1000, help="Number of test samples (default: 1000)")
+    conformal_bench.add_argument("--mondrian", action="store_true", default=True, help="Use Mondrian class-conditional calibration")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -1177,6 +1189,73 @@ def main():
             ivf_qps = args.queries / ivf_sec
             print(f"   • Latency       : {ivf_us_per_q:.2f} µs/query")
             print(f"   • Throughput    : {ivf_qps:.0f} QPS\n")
+            print("=" * 65 + "\n")
+    elif args.command == "conformal":
+        from reflex.conformal import ConformalConfig, ConformalPredictor
+        if args.conformal_action == "info":
+            if not os.path.exists(args.path):
+                print(f"❌ File not found: {args.path}")
+                sys.exit(1)
+            try:
+                cp = ConformalPredictor.load(args.path)
+                print("\n" + "=" * 60)
+                print("⚡ Reflex Conformal Calibration Model (.reflex-conformal)")
+                print("=" * 60)
+                print(f" • File Path          : {args.path}")
+                print(f" • File Size          : {os.path.getsize(args.path):,} bytes")
+                print(f" • Significance Alpha : {cp.config.alpha:.4f}")
+                print(f" • Coverage Guarantee : {cp.config.coverage_guarantee * 100:.1f}%")
+                print(f" • Mondrian Partition : {'ENABLED (Class-Conditional) ⚡' if cp.config.mondrian else 'Global'}")
+                print(f" • Calibrated Status  : {'YES ✅' if cp.is_calibrated else 'NO ⚠️'}")
+                print(f" • Noul Calibration   : {len(cp.noul_cal_scores['global'])} samples")
+                print(f" • Noul Thresholds    : {cp.noul_thresholds}")
+                print(f" • Choice Calibration : {len(cp.choice_cal_scores['global'])} samples")
+                print(f" • Choice Thresholds  : {cp.choice_thresholds}")
+                print("=" * 60 + "\n")
+            except Exception as e:
+                print(f"❌ Error inspecting conformal model: {e}")
+                sys.exit(1)
+        elif args.conformal_action == "benchmark":
+            import random
+            print("\n" + "=" * 65)
+            print("⚡ Reflex Conformal Prediction Coverage Benchmark")
+            print("=" * 65)
+            print(f" • Nominal Coverage : {(1.0 - args.alpha) * 100:.1f}% (alpha={args.alpha})")
+            print(f" • Calibration Size : 500 samples")
+            print(f" • Test Set Size    : {args.samples} samples")
+            print(f" • Mondrian Mode    : {'YES ⚡' if args.mondrian else 'NO'}\n")
+
+            rng = random.Random(42)
+            cfg = ConformalConfig(alpha=args.alpha, mondrian=args.mondrian)
+            cp = ConformalPredictor(cfg)
+
+            for _ in range(500):
+                true_label = (rng.random() > 0.5)
+                if true_label:
+                    p = rng.betavariate(4, 1.5)
+                else:
+                    p = rng.betavariate(1.5, 4)
+                cp.add_calibration_noul(p, true_label)
+
+            cp.calibrate()
+
+            test_samples = []
+            for _ in range(args.samples):
+                true_label = (rng.random() > 0.5)
+                if true_label:
+                    p = rng.betavariate(4, 1.5)
+                else:
+                    p = rng.betavariate(1.5, 4)
+                test_samples.append((p, true_label))
+
+            metrics = cp.evaluate_coverage_noul(test_samples)
+            print(f" • Nominal Guarantee : {metrics['nominal_coverage'] * 100:.1f}%")
+            print(f" • Empirical Coverage: {metrics['empirical_coverage'] * 100:.1f}% "
+                  f"{'✅ (PASSED SAFETY BOUND)' if metrics['empirical_coverage'] >= metrics['nominal_coverage'] - 0.01 else '⚠️'}")
+            print(f" • Mean Set Size     : {metrics['mean_set_size']:.3f} labels/prediction")
+            print(f" • Singleton Ratio   : {metrics['singleton_ratio'] * 100:.1f}% (Instant System 1 Shortcut)")
+            print(f" • Escalation Ratio  : {metrics['ambiguous_ratio'] * 100:.1f}% (Certified System 2 Escalation)")
+            print(f" • Anomaly / Empty   : {metrics['empty_ratio'] * 100:.1f}%\n")
             print("=" * 65 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard

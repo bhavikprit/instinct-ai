@@ -160,6 +160,8 @@ class DecisionResult:
     output_tokens: int = 0
     cost_usd: float = 0.0
     cached: bool = False
+    conformal: Optional[Dict[str, Any]] = None
+    should_escalate: bool = False
 
     def __getitem__(self, key: str) -> PrimitiveType:
         return self.decisions[key]
