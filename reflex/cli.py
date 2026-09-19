@@ -4,6 +4,7 @@ Reflex Command-Line Interface (CLI).
 
 import argparse
 import json
+import math
 import os
 import platform
 import shutil
@@ -401,6 +402,17 @@ def main():
     aci_bench.add_argument("--gamma", type=float, default=0.01, help="ACI learning step size (default: 0.01)")
     aci_bench.add_argument("--samples", type=int, default=1000, help="Total stream steps (default: 1000)")
     aci_bench.add_argument("--shift-step", type=int, default=400, help="Step where 35%% error burst distribution shift occurs (default: 400)")
+
+    # Command: cqr (Conformalized Quantile Regression - Phase 36)
+    cqr_parser = subparsers.add_parser("cqr", help="Inspect and benchmark Conformalized Quantile Regression (heteroscedastic intervals)")
+    cqr_sub = cqr_parser.add_subparsers(dest="cqr_action", required=True)
+
+    cqr_info = cqr_sub.add_parser("info", help="Inspect .reflex-cqr model state")
+    cqr_info.add_argument("path", help="Path to .reflex-cqr file")
+
+    cqr_bench = cqr_sub.add_parser("benchmark", help="Benchmark CQR adaptive intervals vs constant-width conformal intervals")
+    cqr_bench.add_argument("--alpha", type=float, default=0.10, help="Significance level (default: 0.10 for 90%% coverage)")
+    cqr_bench.add_argument("--samples", type=int, default=1000, help="Number of calibration samples (default: 1000)")
 
     args = parser.parse_args()
 
@@ -1415,6 +1427,90 @@ def main():
             print(f"   - Final Adapted α_t     : {tracker.current_alpha:.4f}")
             print(f"   - Final Rolling Cov     : {tracker.empirical_coverage * 100:.1f}%")
             print(f"   - Drift Alarm Triggered : {'✅ Yes (Self-Healed)' if tracker.total_steps > 0 else 'No'}\n")
+            print("=" * 65 + "\n")
+    elif args.command == "cqr":
+        from reflex.cqr import CQRConfig, ConformalizedQuantileRegressor
+        if args.cqr_action == "info":
+            try:
+                cqr = ConformalizedQuantileRegressor.load(args.path)
+                print("\n" + "=" * 65)
+                print("⚡ Reflex Conformalized Quantile Regressor (.reflex-cqr)")
+                print("=" * 65)
+                print(f" • Significance Level (α): {cqr.config.alpha:.4f} (Nominal Coverage: {(1.0 - cqr.config.alpha) * 100:.1f}%)")
+                print(f" • Conformal Offset (Q̂)  : {cqr.q_hat:.4f}" if cqr.q_hat is not None else " • Conformal Offset (Q̂)  : Not calibrated")
+                print(f" • Empirical Coverage    : {cqr.empirical_coverage * 100:.1f}%")
+                print(f" • Mean Interval Width   : {cqr.mean_interval_width:.4f} units")
+                print(f" • Quantile Model Dim    : {cqr.head.dim}-d")
+                print(f" • Target Quantiles      : [q_{cqr.config.alpha/2:.3f}, q_{1.0 - cqr.config.alpha/2:.3f}]\n")
+                print("=" * 65 + "\n")
+            except Exception as e:
+                print(f"❌ Error inspecting CQR model: {e}")
+                sys.exit(1)
+        elif args.cqr_action == "benchmark":
+            import random
+            print("\n" + "=" * 65)
+            print("🚀 Reflex Conformalized Quantile Regression (CQR) Benchmark")
+            print("=" * 65)
+            rng = random.Random(42)
+            config = CQRConfig(alpha=args.alpha)
+            cqr = ConformalizedQuantileRegressor(config=config)
+
+            # Generate synthetic heteroscedastic data: y = 2.0 * x + noise, noise ~ N(0, (0.5 + 1.5*x)^2)
+            for _ in range(args.samples):
+                x = rng.uniform(0.1, 5.0)
+                sigma = 0.5 + 1.5 * x
+                true_y = 2.0 * x + rng.gauss(0, sigma)
+                z_score = 1.645
+                q_low = (2.0 * x) - (z_score * sigma)
+                q_high = (2.0 * x) + (z_score * sigma)
+                cqr.add_calibration_sample(q_low, q_high, true_y, point_estimate=2.0 * x)
+
+            cqr.calibrate()
+
+            # Test on 1,000 unseen samples across low-variance and high-variance regimes
+            test_n = 1000
+            cqr_covered = 0
+            cqr_widths = []
+            constant_covered = 0
+            constant_widths = []
+
+            cal_residuals = []
+            for low, high, y, point in cqr.calibration_samples:
+                cal_residuals.append(abs(y - point))
+            p_level = math.ceil((len(cal_residuals) + 1) * (1.0 - args.alpha)) / len(cal_residuals)
+            p_level = min(1.0, max(0.0, p_level))
+            const_margin = sorted(cal_residuals)[min(len(cal_residuals) - 1, max(0, math.ceil(p_level * len(cal_residuals)) - 1))]
+
+            for _ in range(test_n):
+                x = rng.uniform(0.1, 5.0)
+                sigma = 0.5 + 1.5 * x
+                true_y = 2.0 * x + rng.gauss(0, sigma)
+                q_low = (2.0 * x) - (1.645 * sigma)
+                q_high = (2.0 * x) + (1.645 * sigma)
+
+                interval = cqr.predict(q_low, q_high, point_estimate=2.0 * x, min_val=-1e6, max_val=1e6)
+                if interval.contains(true_y):
+                    cqr_covered += 1
+                cqr_widths.append(interval.interval_width)
+
+                const_low = (2.0 * x) - const_margin
+                const_high = (2.0 * x) + const_margin
+                if const_low <= true_y <= const_high:
+                    constant_covered += 1
+                constant_widths.append(2.0 * const_margin)
+
+            cqr_cov = (cqr_covered / test_n) * 100.0
+            const_cov = (constant_covered / test_n) * 100.0
+            cqr_mean_w = sum(cqr_widths) / test_n
+            const_mean_w = sum(constant_widths) / test_n
+
+            print(f" • Nominal Coverage Target : {(1.0 - args.alpha) * 100:.1f}%")
+            print(f" • Conformal Offset (Q̂)    : ±{cqr.q_hat:.4f} units")
+            print(f"\n Method Comparison on {test_n} Test Samples:")
+            print(f" {'Method':<25} {'Coverage':<12} {'Mean Width':<15} {'Status'}")
+            print(" " + "-" * 60)
+            print(f" {'Constant-Width Conformal':<25} {const_cov:>6.1f}%     {const_mean_w:>8.3f} units    {'✅ (Covered, Rigid)'}")
+            print(f" {'Reflex CQR (Adaptive)':<25} {cqr_cov:>6.1f}%     {cqr_mean_w:>8.3f} units    {'✅ (Covered, Heteroscedastic)'}\n")
             print("=" * 65 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard

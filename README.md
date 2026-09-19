@@ -1306,6 +1306,16 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Online ground truth ingestion via `rx.record_feedback(key, true_value, prediction_set)`
    - [x] CLI inspection and online shift benchmarking tools (`reflex aci info`, `reflex aci benchmark`)
    - [x] 20-test suite verification (`tests/test_aci.py`) and live drift recovery demonstration (`examples/35_adaptive_conformal_inference_drift.py`)
+ - [x] **Phase 36: Conformalized Quantile Regression (CQR) for Continuous Target Intervals (`reflex.cqr`)**
+   - [x] Romano, Sesia & Candès (2019) distribution-free heteroscedastic uncertainty bounding: $C(x) = [\hat{q}_{\alpha/2}(x) - \hat{Q},\, \hat{q}_{1-\alpha/2}(x) + \hat{Q}]$
+   - [x] Finite-sample mathematical coverage guarantee: $\mathbb{P}(Y \in C(X)) \ge 1 - \alpha$ for arbitrary non-Gaussian continuous distributions
+   - [x] Adaptive interval widths scaling dynamically with query complexity and local epistemic variance
+   - [x] Built-in `QuantileInstinctHead` optimizing dual quantile estimators via asymmetric pinball loss (quantile loss) over 384-d semantic embeddings
+   - [x] Epistemic tolerance escalation: triggers System-2 deliberation when interval width exceeds `max_width_tolerance`
+   - [x] Zero-dependency binary persistence format (`.reflex-cqr`, magic `RFCQ`, 48-byte structured header, 32-bit CRC32 trailer)
+   - [x] Seamless `Reflex(cqr=engine).evaluate()` integration with continuous `Score` decisions and automated `result.should_escalate`
+   - [x] CLI inspection and heteroscedastic efficiency benchmarking tools (`reflex cqr info`, `reflex cqr benchmark`)
+   - [x] 20-test suite verification (`tests/test_cqr.py`) and live heteroscedastic latency estimation demonstration (`examples/36_conformalized_quantile_regression.py`)
 
 
 ---

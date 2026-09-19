@@ -73,6 +73,7 @@ class Reflex:
         conformal: Optional[Any] = None,
         crc: Optional[Any] = None,
         aci: Optional[Any] = None,
+        cqr: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -83,6 +84,7 @@ class Reflex:
         self.conformal = conformal
         self.crc = crc
         self.aci = aci
+        self.cqr = cqr
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -455,6 +457,25 @@ class Reflex:
                     if d_bound.should_escalate:
                         result.should_escalate = True
             result.risk_bounds = risk_bounds
+
+        # 7. Conformalized Quantile Regression (CQR) & Epistemic Uncertainty Bounding (Phase 36)
+        if self.cqr is not None and getattr(self.cqr, "is_calibrated", False):
+            cqr_intervals = {}
+            for k, dec in result.decisions.items():
+                if isinstance(dec, Score):
+                    pred_low, pred_high = self.cqr.head.predict_quantiles(state)
+                    interval = self.cqr.predict(
+                        pred_low=pred_low,
+                        pred_high=pred_high,
+                        point_estimate=dec.score,
+                        min_val=dec.min_val,
+                        max_val=dec.max_val,
+                        instructions=dec.instructions,
+                    )
+                    cqr_intervals[k] = interval
+                    if interval.should_escalate:
+                        result.should_escalate = True
+            result.cqr = cqr_intervals
 
         return result
 

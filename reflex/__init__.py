@@ -143,6 +143,12 @@ from reflex.aci import (
     AdaptiveConformalTracker,
     ACIStatus,
 )
+from reflex.cqr import (
+    CQRConfig,
+    CQRInterval,
+    QuantileInstinctHead,
+    ConformalizedQuantileRegressor,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -263,6 +269,10 @@ __all__ = [
     "ACIConfig",
     "AdaptiveConformalTracker",
     "ACIStatus",
+    "CQRConfig",
+    "CQRInterval",
+    "QuantileInstinctHead",
+    "ConformalizedQuantileRegressor",
 ]
 
 

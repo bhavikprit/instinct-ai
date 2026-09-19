@@ -163,6 +163,7 @@ class DecisionResult:
     conformal: Optional[Dict[str, Any]] = None
     risk_bounds: Optional[Dict[str, Any]] = None
     aci: Optional[Dict[str, Any]] = None
+    cqr: Optional[Dict[str, Any]] = None
     should_escalate: bool = False
 
     def __getitem__(self, key: str) -> PrimitiveType:
@@ -210,6 +211,11 @@ class DecisionResult:
             }
         if self.aci is not None:
             d["aci"] = self.aci
+        if self.cqr is not None:
+            d["cqr"] = {
+                k: (v.to_dict() if hasattr(v, "to_dict") else v)
+                for k, v in self.cqr.items()
+            }
         if self.should_escalate:
             d["should_escalate"] = True
         return d
