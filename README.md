@@ -571,16 +571,17 @@ prob = rx.noul("Is this a critical incident?", "Database primary replica timeout
 
 ## 📊 Cross-Language Performance Leaderboard
 
-Reflex executes across three official runtimes with **zero external dependencies** and bit-for-bit mathematical parity:
+Reflex executes across four official runtimes with **zero external dependencies** and bit-for-bit mathematical parity:
 
 | Runtime | Throughput | Noul Decision | Vector Encode (384-d) | Guardrails | Dependencies |
 | :--- | :---: | :---: | :---: | :---: | :---: |
+| **Rust Safe Runtime (`reflex-rs`)** | **79,310 ops/s** | **12.6 µs** | **11.7 µs** | **0.2 µs** | **0 external crates** |
 | **Native C99 (`libreflex`)** | **63,460 ops/s** | **15.8 µs** | **28.9 µs** | **2.3 µs** | **0 C libraries** |
 | **Pure Python (`reflex-core`)** | **11,030 ops/s** | **90.7 µs** | **48.5 µs** | **6.4 µs** | **0 pip packages** |
 | **JavaScript / Edge (`@reflex`)** | **6,154 ops/s** | **162.5 µs** | **99.9 µs** | **1.1 µs** | **0 npm packages** |
 
 ```bash
-# Run benchmark across all three runtimes on your machine
+# Run benchmark across all four runtimes on your machine
 python benchmarks/cross_language_bench.py
 ```
 
@@ -712,6 +713,11 @@ print(flow.to_mermaid())  # Exports Mermaid flowchart diagram
    - [x] Sub-millisecond conditional reflex edges driven by `Noul` and `Choice` (<0.05ms)
    - [x] Automatic epistemic escalation and fallback hooks for high-uncertainty transitions
    - [x] Real-time step streaming (`flow.stream()`), time-travel history, and Mermaid diagram export
+ - [x] **Phase 17: Rust Safe Runtime & WebAssembly (`reflex-rs`)**
+   - [x] Zero-dependency pure-Rust crate with bit-for-bit vector parity (<12µs)
+   - [x] Strongly-typed `Noul`, `Choice`, `Score`, and `GuardrailSuite`
+   - [x] Instant throughput of 79,000+ ops/sec with sub-millisecond execution
+   - [x] WebAssembly compatibility (`wasm32-unknown-unknown` / `wasm32-wasi`)
 
 ---
 

@@ -50,6 +50,11 @@ jobs:
       run: |
         node --test packages/reflex-sdk/test/test_reflex.mjs
 
+    - name: Run Rust SDK Tests (reflex-rs)
+      run: |
+        cargo test --manifest-path packages/reflex-rs/Cargo.toml
+
     - name: Run DecisionBench Evaluation
       run: |
         python benchmarks/decision_bench.py
+

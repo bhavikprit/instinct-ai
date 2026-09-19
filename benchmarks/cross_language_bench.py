@@ -135,19 +135,42 @@ def benchmark_js() -> Dict[str, Any]:
     return data
 
 
+def benchmark_rust() -> Dict[str, Any]:
+    print("🦀 Benchmarking Rust Runtime (reflex-rs)...")
+    if not shutil.which("cargo"):
+        return {}
+
+    res = subprocess.run(
+        [
+            "cargo", "run", "--manifest-path", "packages/reflex-rs/Cargo.toml",
+            "--example", "bench", "--release", "--quiet", str(ITERATIONS)
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    data = json.loads(res.stdout.strip())
+    data["runtime"] = "Rust Safe Runtime (reflex-rs)"
+    data["deps"] = "0 external crates"
+    return data
+
+
 def main():
     print("=" * 75)
-    print("🚀 Reflex Tri-Language Cross-Platform Benchmark")
+    print("🚀 Reflex Quad-Language Cross-Platform Benchmark")
     print(f"   Sample Input: '{SAMPLE_PROMPT[:50]}...'")
     print(f"   Benchmark Sample Size: {ITERATIONS:,} iterations per test")
     print("=" * 75 + "\n")
 
     results = []
-    r_py = benchmark_python()
-    if r_py: results.append(r_py)
-
     r_c = benchmark_c()
     if r_c: results.append(r_c)
+
+    r_rs = benchmark_rust()
+    if r_rs: results.append(r_rs)
+
+    r_py = benchmark_python()
+    if r_py: results.append(r_py)
 
     r_js = benchmark_js()
     if r_js: results.append(r_js)

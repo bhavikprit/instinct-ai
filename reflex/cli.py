@@ -47,6 +47,13 @@ def run_doctor():
     else:
         print(f"  • Edge SDK (@reflex) : ⚪ Node.js not detected on PATH")
 
+    cargo_bin = shutil.which("cargo")
+    rust_manifest = os.path.join(os.path.dirname(__file__), "..", "packages", "reflex-rs", "Cargo.toml")
+    if cargo_bin and os.path.exists(rust_manifest):
+        print(f"  • Rust SDK (reflex-rs): ✅ Available (Cargo {cargo_bin})")
+    else:
+        print(f"  • Rust SDK (reflex-rs): ⚪ Cargo toolchain not detected on PATH")
+
     try:
         import onnxruntime
         providers = onnxruntime.get_available_providers()

@@ -1,0 +1,15 @@
+[package]
+name = "reflex-rs"
+version = "0.2.0"
+edition = "2021"
+authors = ["Reflex AI Team"]
+description = "Universal Machine-Native System-1 AI Runtime for Rust & WebAssembly"
+license = "Apache-2.0"
+keywords = ["ai", "decision-model", "system-1", "llm", "reflex"]
+categories = ["science", "algorithms", "wasm"]
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+# Zero external dependencies - pure standard library core
