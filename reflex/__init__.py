@@ -160,6 +160,12 @@ from reflex.venn_abers import (
     VennAbersChoiceResult,
     VennAbersPredictor,
 )
+from reflex.reject import (
+    SelectiveRejectConfig,
+    SelectiveDecision,
+    RiskCoveragePoint,
+    SelectiveClassifier,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -291,6 +297,10 @@ __all__ = [
     "VennAbersNoulResult",
     "VennAbersChoiceResult",
     "VennAbersPredictor",
+    "SelectiveRejectConfig",
+    "SelectiveDecision",
+    "RiskCoveragePoint",
+    "SelectiveClassifier",
 ]
 
 

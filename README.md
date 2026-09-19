@@ -1337,6 +1337,17 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Seamless `Reflex(venn_abers=engine)` runtime integration with `result.venn_abers` and `rx.record_venn_abers_feedback`
    - [x] CLI inspection and density-stratified interval benchmarking tools (`reflex va info`, `reflex va benchmark`)
    - [x] 25-test suite verification (`tests/test_venn_abers.py`) and live in-distribution vs OOD epistemic demonstration (`examples/38_venn_abers_calibrated_intervals.py`)
+ - [x] **Phase 39: Selective Classification & Risk-Controlled Rejection (`reflex.reject`)**
+   - [x] Geifman & El-Yaniv (NeurIPS 2017 / ICML 2019) risk-controlled selective classification runtime
+   - [x] Finite-sample statistical risk upper bounding via Clopper-Pearson / Wilson-score intervals with continuity correction
+   - [x] Dual operating modes: Target-Risk mode (guarantee selective risk $R \le r^*$ while maximizing coverage) and Target-Coverage mode (guarantee coverage $\phi \ge \phi^*$ while minimizing risk)
+   - [x] Multi-metric confidence scoring: softmax confidence, margin (top-1 vs top-2), and normalized Shannon negative entropy
+   - [x] Risk-Coverage (RC) curves, Area Under the Risk-Coverage Curve (AURC), and ASCII terminal curve rendering
+   - [x] Automated rejection ($g(x) = 0$) triggering System-2 deliberation when confidence score falls below calibrated optimal threshold $\theta^*$
+   - [x] Zero-dependency binary persistence format (`.reflex-reject`, magic `RFRJ`, 48-byte structured header, 32-bit CRC32 trailer)
+   - [x] Seamless `Reflex(selective_reject=...)` runtime integration with `result.rejection` and `rx.record_selective_feedback`
+   - [x] CLI inspection and Risk-Coverage curve benchmarking tools (`reflex reject info`, `reflex reject benchmark`)
+   - [x] 45-test suite verification (`tests/test_reject.py`) and live risk-controlled production simulation (`examples/39_selective_classification_rejection.py`)
 
 
 ---

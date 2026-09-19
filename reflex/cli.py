@@ -437,6 +437,17 @@ def main():
     va_bench.add_argument("--samples", type=int, default=500, help="Number of calibration samples (default: 500)")
     va_bench.add_argument("--threshold", type=float, default=0.20, help="Epistemic uncertainty escalation threshold (default: 0.20)")
 
+    # Command: reject (Selective Classification & Risk-Controlled Rejection - Phase 39)
+    reject_parser = subparsers.add_parser("reject", help="Inspect and benchmark selective classification with risk-controlled rejection")
+    reject_sub = reject_parser.add_subparsers(dest="reject_action", required=True)
+
+    reject_info = reject_sub.add_parser("info", help="Inspect .reflex-reject model state and rejection policy")
+    reject_info.add_argument("path", help="Path to .reflex-reject file")
+
+    reject_bench = reject_sub.add_parser("benchmark", help="Benchmark selective classification Risk-Coverage trade-off curve")
+    reject_bench.add_argument("--samples", type=int, default=500, help="Number of calibration samples (default: 500)")
+    reject_bench.add_argument("--target-risk", type=float, default=0.02, help="Target risk budget (default: 0.02 for <=2%% error)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -1659,6 +1670,70 @@ def main():
                 inv_str = f"[{res.p0:.4f}, {res.p1:.4f}]"
                 status = "🚨 Escalated (OOD/Sparse)" if res.should_escalate else "✅ Autonomous (Confident)"
                 print(f" {label:<24} {sc:<14.2f} {inv_str:<22} {res.uncertainty:<12.4f} {status}")
+            print("=" * 65 + "\n")
+    elif args.command == "reject":
+        from reflex.reject import SelectiveClassifier, SelectiveRejectConfig
+        if args.reject_action == "info":
+            try:
+                sc = SelectiveClassifier.load(args.path)
+                print("\n" + "=" * 65)
+                print("⚡ Reflex Selective Classification & Rejection (.reflex-reject)")
+                print("=" * 65)
+                print(f" • Calibration Samples   : {sc.num_calibration_samples}")
+                print(f" • Total Seen Samples    : {sc.total_samples}")
+                print(f" • Scoring Metric        : {sc.config.scoring_method}")
+                if sc.config.target_risk is not None:
+                    print(f" • Target Risk Budget    : <= {sc.config.target_risk * 100:.2f}%")
+                if sc.config.target_coverage is not None:
+                    print(f" • Target Coverage       : >= {sc.config.target_coverage * 100:.2f}%")
+                print(f" • Optimal Threshold θ*  : {sc.threshold:.4f}")
+                print(f" • Empirical Risk        : {sc.calibrated_empirical_risk * 100:.2f}%")
+                print(f" • Guaranteed Upper Risk : {sc.calibrated_upper_risk * 100:.2f}% (95% CI)")
+                print(f" • Autonomous Coverage φ : {sc.calibrated_coverage * 100:.2f}%")
+                print(f" • Area Under RC (AURC)  : {sc.aurc():.4f}")
+                print(f" • Status                : {'✅ Calibrated' if sc.is_calibrated else '⚠️ Warm-up needed'}\n")
+
+                print(" Risk-Coverage Frontier Preview:")
+                print(sc.ascii_risk_coverage_curve(num_points=8))
+                print("=" * 65 + "\n")
+            except Exception as e:
+                print(f"❌ Error inspecting selective rejection model: {e}")
+                sys.exit(1)
+        elif args.reject_action == "benchmark":
+            import random
+            print("\n" + "=" * 65)
+            print("🚀 Reflex Selective Classification & Rejection Benchmark")
+            print("=" * 65)
+            rng = random.Random(42)
+            cfg = SelectiveRejectConfig(target_risk=args.target_risk, min_calibration_samples=30)
+            sc = SelectiveClassifier(config=cfg)
+
+            for _ in range(args.samples):
+                conf = 0.5 + 0.5 * (rng.random() ** 0.5)
+                err_prob = max(0.0, min(0.5, (1.0 - conf) * 0.8))
+                is_error = 1 if rng.random() < err_prob else 0
+                sc.add_calibration_sample(conf, is_error)
+
+            sc.calibrate()
+            print(f" • Calibration Samples   : {sc.num_calibration_samples}")
+            print(f" • Target Risk Budget    : <= {args.target_risk * 100:.2f}%")
+            print(f" • Optimal Threshold θ*  : {sc.threshold:.4f}")
+            print(f" • Empirical Risk        : {sc.calibrated_empirical_risk * 100:.2f}%")
+            print(f" • Guaranteed Upper Risk : {sc.calibrated_upper_risk * 100:.2f}% (95% CI)")
+            print(f" • Autonomous Coverage φ : {sc.calibrated_coverage * 100:.2f}%")
+            print(f" • Area Under RC (AURC)  : {sc.aurc():.4f}\n")
+
+            print(" Empirical Risk-Coverage Trade-Off Curve (ASCII):")
+            print(sc.ascii_risk_coverage_curve(num_points=12))
+
+            print("\n Query Regimes vs Rejection Decisions:")
+            print(f" {'Confidence':<14} {'Threshold':<12} {'Verdict':<20} {'Guaranteed Risk':<18} {'Action'}")
+            print(" " + "-" * 75)
+            for conf_val in [0.55, 0.65, 0.75, 0.85, 0.92, 0.98]:
+                accepted = conf_val >= sc.threshold
+                verdict = "✅ ACCEPT" if accepted else "❌ REJECT"
+                action = "Autonomous System-1" if accepted else "Escalate to System-2"
+                print(f" {conf_val:<14.2f} {sc.threshold:<12.4f} {verdict:<20} {sc.calibrated_upper_risk * 100:<17.2f}% {action}")
             print("=" * 65 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard

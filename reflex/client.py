@@ -76,6 +76,7 @@ class Reflex:
         cqr: Optional[Any] = None,
         calibrator: Optional[Any] = None,
         venn_abers: Optional[Any] = None,
+        selective_reject: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -89,6 +90,11 @@ class Reflex:
         self.cqr = cqr
         self.calibrator = calibrator
         self.venn_abers = venn_abers
+        if selective_reject is True:
+            from reflex.reject import SelectiveClassifier
+            self.selective_reject = SelectiveClassifier()
+        else:
+            self.selective_reject = selective_reject
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -513,6 +519,22 @@ class Reflex:
                         result.should_escalate = True
             result.venn_abers = va_results
 
+        # 10. Selective Classification & Risk-Controlled Rejection (Phase 39)
+        if self.selective_reject is not None and getattr(self.selective_reject, "is_calibrated", False):
+            rejection_results = {}
+            for k, dec in result.decisions.items():
+                if isinstance(dec, Noul):
+                    sel_res = self.selective_reject.evaluate_noul(dec)
+                    rejection_results[k] = sel_res
+                    if not sel_res.accepted:
+                        result.should_escalate = True
+                elif isinstance(dec, Choice):
+                    sel_res = self.selective_reject.evaluate_choice(dec)
+                    rejection_results[k] = sel_res
+                    if not sel_res.accepted:
+                        result.should_escalate = True
+            result.rejection = rejection_results
+
         return result
 
     def audit_root(self) -> Optional[str]:
@@ -667,6 +689,18 @@ class Reflex:
         """
         if self.venn_abers is not None:
             self.venn_abers.add_calibration_sample(raw_score, true_label)
+
+    def record_selective_feedback(
+        self,
+        score: float,
+        is_error: Union[bool, int],
+    ) -> None:
+        """
+        Records ground truth feedback directly to the Selective Classifier (Phase 39).
+        Updates calibration dataset for risk-controlled rejection and coverage guarantees.
+        """
+        if self.selective_reject is not None:
+            self.selective_reject.add_sample(score, is_error)
 
     def sync_fleet(self) -> Dict[str, Any]:
         """Pings all fleet peers and returns cluster connectivity metrics."""
