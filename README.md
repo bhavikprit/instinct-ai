@@ -596,6 +596,51 @@ reflex doctor
 
 ---
 
+## 🔄 Fast Agent State Machine (`reflex.flow`)
+
+Stop burning \$1.50 and 3 seconds per step querying Claude or GPT-4o just to make basic transition decisions in agent loops. **`reflex.flow`** is a zero-dependency, machine-native decision DAG where branching, tool routing, and termination checks execute in **microsecond System-1 instincts ($<0.05\text{ms}$)**.
+
+```python
+from reflex import StateGraph, Noul, Choice, START, END
+
+# 1. Define graph
+graph = StateGraph()
+
+graph.add_node("intake", lambda s: s)
+graph.add_node("billing", handle_billing)
+graph.add_node("support", handle_support)
+graph.add_node("close", close_ticket)
+
+graph.set_entry_point("intake")
+
+# 2. Instant Multi-Way Routing via Choice (<50µs vs 3,000ms LLM)
+graph.add_conditional_edge(
+    source_node="intake",
+    condition=Choice("Route ticket domain", ["billing", "support"]),
+    path_map={"billing": "billing", "support": "support"},
+    extractor="message"
+)
+
+# 3. Binary Resolution Check via Noul
+graph.add_conditional_edge(
+    source_node="billing",
+    condition=Noul("Is the customer issue completely resolved?"),
+    path_map={True: "close", False: "support"},
+    extractor="resolution"
+)
+
+graph.add_edge("close", END)
+
+# 4. Compile & Run with automatic telemetry and savings tracking
+flow = graph.compile()
+result = flow.run({"message": "Refund duplicate charge on Visa ending 4242"})
+
+print(f"Latency: {result.total_latency_ms:.2f}ms | Savings: ${result.estimated_savings_usd:.4f}")
+print(flow.to_mermaid())  # Exports Mermaid flowchart diagram
+```
+
+---
+
 ## 🗺️ Project Roadmap
  
  - [x] **Phase 1: Core SDK & Drop-in Proxy**
@@ -603,6 +648,7 @@ reflex doctor
    - [x] Multi-backend routing (Local, TypeSafe Jev, OpenRouter, Fallback)
    - [x] Zero-dependency OpenAI-compatible reverse proxy
  - [x] **Phase 2: Framework Integrations & Agent Tools**
+
    - [x] Model Context Protocol (MCP) server for Claude Desktop & Cursor
    - [x] LangChain & LangGraph `ReflexRouterNode` and `ReflexGuardrailNode`
    - [x] DecisionBench standardized benchmark suite
@@ -661,6 +707,11 @@ reflex doctor
    - [x] 90,000+ ops/second throughput and sub-10 microsecond ($<0.01\text{ms}$) latency
    - [x] Python `NativeCEngine` ctypes accelerator with 100% mathematical vector parity
    - [x] Embedded standalone demo (`examples/16_embedded_c_api.c`) with zero Python dependency
+ - [x] **Phase 16: Fast Agent State Machine & Decision Graph (`reflex.flow`)**
+   - [x] Zero-dependency machine-native decision DAG (`StateGraph`, `Flow`, `START`, `END`)
+   - [x] Sub-millisecond conditional reflex edges driven by `Noul` and `Choice` (<0.05ms)
+   - [x] Automatic epistemic escalation and fallback hooks for high-uncertainty transitions
+   - [x] Real-time step streaming (`flow.stream()`), time-travel history, and Mermaid diagram export
 
 ---
 

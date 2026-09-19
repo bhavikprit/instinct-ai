@@ -26,6 +26,17 @@ from reflex.feedback import FeedbackCollector
 from reflex.learning import SelfTuningInstinctHead, OnlineTuner
 from reflex.backends.c_engine import NativeCEngine
 from reflex.proxy import start_proxy
+from reflex.flow import (
+    StateGraph,
+    Flow,
+    START,
+    END,
+    FlowStep,
+    FlowResult,
+    FlowError,
+    MaxStepsExceededError,
+    InvalidTransitionError,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -57,4 +68,14 @@ __all__ = [
     "StreamBlockedError",
     "StreamingDecisionGate",
     "start_proxy",
+    "StateGraph",
+    "Flow",
+    "START",
+    "END",
+    "FlowStep",
+    "FlowResult",
+    "FlowError",
+    "MaxStepsExceededError",
+    "InvalidTransitionError",
 ]
+

@@ -52,11 +52,19 @@ class Noul:
             return True
         return self.uncertainty_low <= self.probability <= self.uncertainty_high
 
+    @property
+    def confidence(self) -> float:
+        """Returns decision certainty in [0.5, 1.0] (or 0.0 if unresolved)."""
+        if self.probability is None:
+            return 0.0
+        return max(self.probability, 1.0 - self.probability)
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "noul",
             "instructions": self.instructions,
             "probability": self.probability,
+            "confidence": self.confidence,
             "is_true": self.is_true,
             "is_uncertain": self.is_uncertain
         }
@@ -87,14 +95,23 @@ class Choice:
     def get_prob(self, option: str) -> float:
         return self.distribution.get(option, 0.0)
 
+    @property
+    def confidence(self) -> float:
+        """Returns probability of the selected choice in [0.0, 1.0]."""
+        if self.selected and self.distribution:
+            return float(self.distribution.get(self.selected, 0.0))
+        return 1.0 if self.selected else 0.0
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "type": "choice",
             "instructions": self.instructions,
             "options": self.options,
             "selected": self.selected,
+            "confidence": self.confidence,
             "distribution": self.distribution
         }
+
 
 
 @dataclass
