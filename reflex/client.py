@@ -20,6 +20,14 @@ from reflex.feedback import FeedbackCollector
 from reflex.mesh import InstinctMeshNode, MeshConfig
 from reflex.shadow import DecisionShadowRouter, ShadowConfig, ShadowStage
 from reflex.speculative import SpeculativeEngine, SpeculativeSession, SpeculativeAction
+from reflex.policy import (
+    PolicyEngine,
+    PolicyRuleSet,
+    PolicyAction,
+    PolicyViolationError,
+    PolicyVerdict,
+    MerkleAuditLog,
+)
 
 
 class Reflex:
@@ -56,6 +64,7 @@ class Reflex:
         shadow_config: Optional[ShadowConfig] = None,
         speculative: bool = False,
         speculative_engine: Optional[SpeculativeEngine] = None,
+        audit_log: Optional[Union[str, MerkleAuditLog]] = None,
         **backend_kwargs,
     ):
 
@@ -147,6 +156,21 @@ class Reflex:
         else:
             self.speculative_engine = None
 
+        # Enterprise Policy & Merkle Audit Trail setup (Phase 23)
+        if isinstance(policy, PolicyEngine):
+            self.policy_engine: Optional[PolicyEngine] = policy
+        elif isinstance(policy, PolicyRuleSet):
+            self.policy_engine = PolicyEngine(ruleset=policy)
+        else:
+            self.policy_engine = None
+
+        if isinstance(audit_log, MerkleAuditLog):
+            self.audit_log: Optional[MerkleAuditLog] = audit_log
+        elif isinstance(audit_log, str):
+            self.audit_log = MerkleAuditLog(storage_path=audit_log)
+        else:
+            self.audit_log = None
+
     def _evaluate_direct(self, state: str, questions: Dict[str, PrimitiveType]) -> DecisionResult:
         """Internal direct evaluation bypassing shadow router (used by champion/challenger)."""
         if self.cache is not None:
@@ -188,11 +212,90 @@ class Reflex:
         questions: Dict[str, PrimitiveType],
         client_key: Optional[str] = None,
         shadow: bool = True,
+        context: Optional[Dict[str, Any]] = None,
     ) -> DecisionResult:
         """Evaluates typed questions against state in a single pass."""
-        if self.shadow_router is not None and shadow:
-            return self.shadow_router.evaluate(state, questions, client_key=client_key)
-        return self._evaluate_direct(state, questions)
+        pre_verdict = None
+        effective_shadow = shadow
+
+        # 1. Pre-flight Policy-as-Code Evaluation (Phase 23)
+        if self.policy_engine is not None:
+            pre_verdict = self.policy_engine.evaluate(state=state, context=context)
+            if pre_verdict.action == PolicyAction.DENY:
+                if self.audit_log is not None:
+                    self.audit_log.append(
+                        state=state,
+                        decisions={},
+                        metadata=context or {},
+                        policy_verdict=pre_verdict,
+                    )
+                raise PolicyViolationError(
+                    message=f"Operation denied by compliance policy: {pre_verdict.reason}",
+                    rule_id=pre_verdict.violations[0] if pre_verdict.violations else "DENY",
+                    action=pre_verdict.action,
+                    tags=pre_verdict.tags,
+                )
+            elif pre_verdict.action == PolicyAction.ENFORCE_LOCAL:
+                # Disallow cloud / external shadow escalation for strict data sovereignty
+                effective_shadow = False
+
+        # 2. Decision Evaluation (Direct vs Shadow)
+        if self.shadow_router is not None and effective_shadow:
+            result = self.shadow_router.evaluate(state, questions, client_key=client_key)
+        else:
+            result = self._evaluate_direct(state, questions)
+
+        # 3. Post-flight Policy Check (verify evaluated decisions)
+        final_verdict = pre_verdict
+        if self.policy_engine is not None:
+            decisions_repr = {k: v.to_dict() for k, v in result.decisions.items()}
+            post_verdict = self.policy_engine.evaluate(
+                state=state,
+                context=context,
+                decisions=decisions_repr,
+            )
+            final_verdict = post_verdict
+            if post_verdict.action == PolicyAction.DENY:
+                if self.audit_log is not None:
+                    self.audit_log.append(
+                        state=state,
+                        decisions=decisions_repr,
+                        metadata=context or {},
+                        policy_verdict=post_verdict,
+                    )
+                raise PolicyViolationError(
+                    message=f"Decision output denied by compliance policy: {post_verdict.reason}",
+                    rule_id=post_verdict.violations[0] if post_verdict.violations else "DENY",
+                    action=post_verdict.action,
+                    tags=post_verdict.tags,
+                )
+
+        # 4. Cryptographic Merkle Audit Log Append (Phase 23)
+        if self.audit_log is not None:
+            self.audit_log.append(
+                state=state,
+                decisions={k: v.to_dict() for k, v in result.decisions.items()},
+                metadata=context or {},
+                policy_verdict=final_verdict or {"action": "ALLOW", "allowed": True},
+            )
+
+        return result
+
+    def audit_root(self) -> Optional[str]:
+        """Returns the current Merkle root of the decision audit log."""
+        return self.audit_log.root if self.audit_log is not None else None
+
+    def verify_audit_log(self) -> Tuple[bool, Optional[int], str]:
+        """Verifies cryptographic hash-chain integrity of the audit log."""
+        if self.audit_log is not None:
+            return self.audit_log.verify_chain()
+        return True, None, "No audit log active"
+
+    def export_audit_proof(self, index: int) -> Optional[Dict[str, Any]]:
+        """Generates an O(log N) Merkle audit proof for a decision entry."""
+        if self.audit_log is not None:
+            return self.audit_log.prove(index)
+        return None
 
     def canary_stats(self) -> Optional[Dict[str, Any]]:
         """Returns real-time canary agreement and traffic stats if shadowing is active."""

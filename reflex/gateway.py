@@ -28,6 +28,14 @@ from reflex.primitives import Noul, Choice
 from reflex.mesh import InstinctMeshNode, MeshConfig
 from reflex.shadow import DecisionShadowRouter, ShadowConfig, ShadowStage
 from reflex.speculative import SpeculativeEngine
+from reflex.policy import (
+    PolicyEngine,
+    PolicyRuleSet,
+    PolicyAction,
+    PolicyViolationError,
+    PolicyVerdict,
+    MerkleAuditLog,
+)
 
 
 @dataclass
@@ -57,6 +65,12 @@ class GatewayConfig:
     canary_shadow_traffic_pct: float = 100.0
     speculative_enabled: bool = False
     speculative_threshold: float = 0.75
+    policy_enabled: bool = False
+    policy_file: Optional[str] = None
+    policy_engine: Optional[PolicyEngine] = None
+    audit_enabled: bool = False
+    audit_log_path: Optional[str] = None
+    audit_log: Optional[MerkleAuditLog] = None
 
 
 
@@ -242,6 +256,8 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
     mesh_node: Optional[InstinctMeshNode] = None
     shadow_router: Optional[DecisionShadowRouter] = None
     speculative_engine: Optional[SpeculativeEngine] = None
+    policy_engine: Optional[PolicyEngine] = None
+    audit_log: Optional[MerkleAuditLog] = None
 
     @classmethod
     def initialize(cls, config: GatewayConfig):
@@ -296,6 +312,26 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         else:
             cls.speculative_engine = None
 
+        # Enterprise Policy Engine (Phase 23)
+        if config.policy_engine is not None:
+            cls.policy_engine = config.policy_engine
+        elif config.policy_file and os.path.exists(config.policy_file):
+            cls.policy_engine = PolicyEngine(PolicyRuleSet.from_json_file(config.policy_file))
+        elif config.policy_enabled:
+            cls.policy_engine = PolicyEngine(PolicyRuleSet(name="gateway_default"))
+        else:
+            cls.policy_engine = None
+
+        # Cryptographic Merkle Audit Log (Phase 23)
+        if config.audit_log is not None:
+            cls.audit_log = config.audit_log
+        elif config.audit_log_path:
+            cls.audit_log = MerkleAuditLog(storage_path=config.audit_log_path)
+        elif config.audit_enabled:
+            cls.audit_log = MerkleAuditLog()
+        else:
+            cls.audit_log = None
+
     def do_GET(self):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/healthz", "/health"):
@@ -312,6 +348,43 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(200, self.speculative_engine.stats())
             else:
                 self._send_json(400, {"error": "Speculative engine is not enabled on this gateway"})
+        elif norm_path in ("/v1/policy/rules", "/policy/rules"):
+            if self.policy_engine is not None:
+                self._send_json(200, self.policy_engine.ruleset.to_dict())
+            else:
+                self._send_json(400, {"error": "Policy engine is not enabled on this gateway"})
+        elif norm_path in ("/v1/audit/root", "/audit/root"):
+            if self.audit_log is not None:
+                self._send_json(200, {
+                    "merkle_root": self.audit_log.root,
+                    "total_entries": self.audit_log.height(),
+                })
+            else:
+                self._send_json(400, {"error": "Audit logging is not enabled on this gateway"})
+        elif norm_path in ("/v1/audit/verify", "/audit/verify"):
+            if self.audit_log is not None:
+                is_valid, broken_idx, reason = self.audit_log.verify_chain()
+                status_code = 200 if is_valid else 409
+                self._send_json(status_code, {
+                    "valid": is_valid,
+                    "broken_index": broken_idx,
+                    "reason": reason,
+                    "merkle_root": self.audit_log.root,
+                    "total_entries": self.audit_log.height(),
+                })
+            else:
+                self._send_json(400, {"error": "Audit logging is not enabled on this gateway"})
+        elif norm_path.startswith("/v1/audit/proof/") or norm_path.startswith("/audit/proof/"):
+            if self.audit_log is not None:
+                parts = norm_path.split("/")
+                try:
+                    idx = int(parts[-1])
+                    proof_data = self.audit_log.prove(idx)
+                    self._send_json(200, proof_data)
+                except (ValueError, IndexError) as e:
+                    self._send_json(400, {"error": str(e)})
+            else:
+                self._send_json(400, {"error": "Audit logging is not enabled on this gateway"})
         elif norm_path in ("/v1/mesh/peers", "/mesh/peers"):
 
             if self.mesh_node is not None:
@@ -335,6 +408,19 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/v1/chat/completions", "/chat/completions"):
             self.handle_chat_completions()
+        elif norm_path in ("/v1/policy/evaluate", "/policy/evaluate"):
+            if self.policy_engine is not None:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+                data = json.loads(body) if body else {}
+                verdict = self.policy_engine.evaluate(
+                    state=data.get("state", ""),
+                    context=data.get("context", {}),
+                    decisions=data.get("decisions", {}),
+                )
+                self._send_json(200, verdict.to_dict())
+            else:
+                self._send_json(400, {"error": "Policy engine is not enabled on this gateway"})
         elif norm_path in ("/v1/canary/stage", "/canary/stage"):
             if self.shadow_router is not None:
                 content_len = int(self.headers.get("Content-Length", 0))
@@ -424,6 +510,35 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         model = req_json.get("model", "gpt-4o")
 
         # -------------------------------------------------------------
+        # 0. Pre-Flight Enterprise Policy-as-Code Check (Phase 23)
+        # -------------------------------------------------------------
+        policy_verdict = None
+        if self.policy_engine is not None:
+            ctx = {
+                "model": model,
+                "ip": self.client_address[0] if self.client_address else "127.0.0.1",
+            }
+            policy_verdict = self.policy_engine.evaluate(state=combined_prompt, context=ctx)
+            if policy_verdict.action == PolicyAction.DENY:
+                if self.audit_log is not None:
+                    self.audit_log.append(
+                        state=combined_prompt,
+                        decisions={},
+                        metadata=ctx,
+                        policy_verdict=policy_verdict,
+                    )
+                self._send_json(403, {
+                    "error": {
+                        "message": f"Blocked by Reflex Enterprise Compliance Policy: {policy_verdict.reason}",
+                        "type": "policy_violation",
+                        "violations": policy_verdict.violations,
+                        "tags": policy_verdict.tags,
+                        "code": 403,
+                    }
+                }, extra_headers={"X-Reflex-Policy": "DENIED"})
+                return
+
+        # -------------------------------------------------------------
         # 1. Pre-Flight Security Guardrail Check (<1ms)
         # -------------------------------------------------------------
         if self.config.guardrails_enabled:
@@ -466,12 +581,22 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                         latency_saved=self.config.estimated_upstream_latency_ms,
                     )
 
-                self._send_json(200, cached_data, extra_headers={
+                extra_hdrs = {
                     "X-Reflex-Cache": hit_type,
                     "X-Reflex-Similarity": f"{cache_entry.similarity:.4f}",
                     "X-Reflex-Latency-Ms": f"{latency_ms:.2f}",
                     "X-Reflex-Cost-Saved-USD": f"{self.config.estimated_upstream_cost_usd:.4f}",
-                })
+                }
+                if self.audit_log is not None:
+                    audit_entry = self.audit_log.append(
+                        state=combined_prompt,
+                        decisions={"response": cached_data},
+                        metadata={"model": model, "cached": True},
+                        policy_verdict=policy_verdict,
+                    )
+                    extra_hdrs["X-Reflex-Audit-Index"] = str(audit_entry.index)
+                    extra_hdrs["X-Reflex-Merkle-Root"] = self.audit_log.root
+                self._send_json(200, cached_data, extra_headers=extra_hdrs)
                 return
 
         # -------------------------------------------------------------
@@ -479,8 +604,9 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         # -------------------------------------------------------------
         response_format = req_json.get("response_format", {})
         is_decision = self._is_decision_candidate(combined_prompt, response_format)
+        force_local = (policy_verdict is not None and policy_verdict.action == PolicyAction.ENFORCE_LOCAL)
 
-        if self.config.system1_routing_enabled and is_decision:
+        if (self.config.system1_routing_enabled and is_decision) or force_local:
             res_payload = self._fulfill_system1(req_json, combined_prompt)
             latency_ms = (time.perf_counter() - t0) * 1000.0
             
@@ -504,6 +630,16 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 extra_headers["X-Reflex-Shadowed"] = "TRUE"
                 is_chal = (self.shadow_router.config.stage == ShadowStage.PROMOTED or self.shadow_router.config.canary_traffic_pct >= 50.0)
                 extra_headers["X-Reflex-Decision-Head"] = "challenger" if is_chal else "champion"
+
+            if self.audit_log is not None:
+                audit_entry = self.audit_log.append(
+                    state=combined_prompt,
+                    decisions={"response": res_payload},
+                    metadata={"model": model, "cached": False},
+                    policy_verdict=policy_verdict,
+                )
+                extra_headers["X-Reflex-Audit-Index"] = str(audit_entry.index)
+                extra_headers["X-Reflex-Merkle-Root"] = self.audit_log.root
 
             self._send_json(200, res_payload, extra_headers=extra_headers)
             return
@@ -676,6 +812,14 @@ class ReflexGatewayServer:
     def speculative_engine(self) -> Optional[SpeculativeEngine]:
         return self.handler_class.speculative_engine
 
+    @property
+    def policy_engine(self) -> Optional[PolicyEngine]:
+        return self.handler_class.policy_engine
+
+    @property
+    def audit_log(self) -> Optional[MerkleAuditLog]:
+        return self.handler_class.audit_log
+
     def start(self, background: bool = False):
         """Start the gateway server."""
         self.handler_class.initialize(self.config)
@@ -698,6 +842,10 @@ class ReflexGatewayServer:
                 print(f"   • Canary/Shadow    : Active (Stage: {self.handler_class.shadow_router.config.stage.value})")
             if self.handler_class.speculative_engine is not None:
                 print(f"   • Speculative Mode : Active (Threshold: {self.config.speculative_threshold:.2f})")
+            if self.handler_class.policy_engine is not None:
+                print(f"   • Policy Engine    : Active ({len(self.handler_class.policy_engine.ruleset.rules)} rules)")
+            if self.handler_class.audit_log is not None:
+                print(f"   • Merkle Audit Log : Active (Height: {self.handler_class.audit_log.height()}, Root: {self.handler_class.audit_log.root[:12]}...)")
             try:
                 self.server.serve_forever()
             except KeyboardInterrupt:

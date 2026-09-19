@@ -876,6 +876,15 @@ reflex canary rollback --gateway http://127.0.0.1:8080
    - [x] Automatic abort and context-manager cleanup on decision miss or abandoned turns
    - [x] Thread-safe telemetry tracking hit rates, latency saved, and aborts (`reflex speculative stats` & `GET /v1/speculative/stats`)
    - [x] End-to-end interactive demonstration (`examples/22_speculative_decision_prefetch.py`) and 169-test suite verification
+ - [x] **Phase 23: Enterprise Policy-as-Code & Merkle Audit Trail (`reflex.policy`)**
+   - [x] Declarative Policy-as-Code rule engine with operator evaluation (`eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `in`, `regex`)
+   - [x] Regulatory compliance rule actions: `DENY` (HTTP 403), `ENFORCE_LOCAL` (HIPAA/GDPR data sovereignty geofencing), `REQUIRE_HUMAN`, `OVERRIDE`
+   - [x] Cryptographic append-only SHA-256 hash-chained decision ledger (`MerkleAuditLog`)
+   - [x] Dynamic binary Merkle tree calculating rolling root hashes and generating $O(\log N)$ inclusion proofs
+   - [x] Tamper-evident verification (`verify_chain()`) pinpointing historical record alterations
+   - [x] AI Envoy Gateway compliance endpoints (`GET /v1/policy/rules`, `GET /v1/audit/root`, `GET /v1/audit/verify`, `GET /v1/audit/proof/:index`)
+   - [x] CLI verification tooling (`reflex policy test`, `reflex audit root`, `reflex audit verify`, `reflex audit proof`)
+   - [x] End-to-end demonstration (`examples/23_enterprise_policy_and_merkle_audit.py`) and 179-test suite verification
 
 
 ---

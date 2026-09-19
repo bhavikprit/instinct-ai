@@ -155,7 +155,30 @@ def main():
     spec_stats_p = spec_sub.add_parser("stats", help="Query live speculative hit rates and latency savings")
     spec_stats_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL (default: http://127.0.0.1:8080)")
 
+    # Command: policy (Enterprise Policy-as-Code ruleset testing)
+    policy_parser = subparsers.add_parser("policy", help="Test and validate enterprise Policy-as-Code rulesets")
+    policy_sub = policy_parser.add_subparsers(dest="policy_action", help="Policy action: test")
+    policy_test_p = policy_sub.add_parser("test", help="Test prompt state against compliance ruleset")
+    policy_test_p.add_argument("--rules", required=True, help="Path to policy ruleset JSON file")
+    policy_test_p.add_argument("--state", required=True, help="Input prompt text to evaluate")
+    policy_test_p.add_argument("--context", default="{}", help="Optional JSON context metadata")
 
+    # Command: audit (Cryptographic Merkle audit trail inspection and verification)
+    audit_parser = subparsers.add_parser("audit", help="Inspect and verify cryptographic Merkle audit trail")
+    audit_sub = audit_parser.add_subparsers(dest="audit_action", help="Audit action: root, verify, proof")
+    
+    audit_root_p = audit_sub.add_parser("root", help="Query current Merkle root and log height")
+    audit_root_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL")
+    audit_root_p.add_argument("--log", help="Path to local audit log JSONL file")
+
+    audit_verify_p = audit_sub.add_parser("verify", help="Verify cryptographic hash chain integrity")
+    audit_verify_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL")
+    audit_verify_p.add_argument("--log", help="Path to local audit log JSONL file")
+
+    audit_proof_p = audit_sub.add_parser("proof", help="Export O(log N) Merkle audit proof for an entry")
+    audit_proof_p.add_argument("--index", type=int, required=True, help="Audit entry index")
+    audit_proof_p.add_argument("--gateway", default="http://127.0.0.1:8080", help="Gateway URL")
+    audit_proof_p.add_argument("--log", help="Path to local audit log JSONL file")
 
     # Command: mesh (Cluster inspection and sync)
     mesh_parser = subparsers.add_parser("mesh", help="Inspect and ping Reflex Instinct Mesh cluster")
@@ -372,6 +395,71 @@ def main():
                 print()
         except Exception as e:
             print(f"\n❌ Error querying mesh gateway: {e}\n")
+    elif args.command == "policy":
+        if getattr(args, "policy_action", None) == "test":
+            from reflex.policy import PolicyEngine, PolicyRuleSet
+            ruleset = PolicyRuleSet.from_json_file(args.rules)
+            engine = PolicyEngine(ruleset)
+            try:
+                ctx = json.loads(args.context)
+            except Exception:
+                ctx = {}
+            verdict = engine.evaluate(state=args.state, context=ctx)
+            print("\n📋 Reflex Enterprise Policy Evaluation Result:")
+            print(f" • Status       : {'ALLOWED ✅' if verdict.allowed else 'DENIED 🛑'}")
+            print(f" • Final Action : {verdict.action.value}")
+            print(f" • Reason       : {verdict.reason}")
+            if verdict.matched_rules:
+                print(f" • Matched Rules: {', '.join(verdict.matched_rules)}")
+            if verdict.violations:
+                print(f" • Violations    : {', '.join(verdict.violations)}")
+            if verdict.tags:
+                print(f" • Tags          : {', '.join(verdict.tags)}")
+            print()
+
+    elif args.command == "audit":
+        from reflex.policy import MerkleAuditLog
+        if getattr(args, "log", None):
+            log = MerkleAuditLog(storage_path=args.log)
+            if args.audit_action == "root":
+                print(f"\n🔐 Merkle Audit Trail (Local File: {args.log})")
+                print(f" • Merkle Root  : {log.root}")
+                print(f" • Total Entries: {log.height()}\n")
+            elif args.audit_action == "verify":
+                is_valid, broken_idx, reason = log.verify_chain()
+                print(f"\n🔐 Merkle Audit Verification (Local File: {args.log})")
+                print(f" • Status      : {'VALID ✅' if is_valid else 'TAMPERED / BROKEN 🛑'}")
+                print(f" • Merkle Root : {log.root}")
+                print(f" • Details     : {reason}\n")
+            elif args.audit_action == "proof":
+                proof = log.prove(args.index)
+                print(json.dumps(proof, indent=2))
+        else:
+            import urllib.request
+            gateway = getattr(args, "gateway", "http://127.0.0.1:8080").rstrip("/")
+            try:
+                if args.audit_action == "root":
+                    req = urllib.request.Request(f"{gateway}/v1/audit/root")
+                    with urllib.request.urlopen(req, timeout=5.0) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        print(f"\n🔐 Merkle Audit Trail (Gateway: {gateway})")
+                        print(f" • Merkle Root  : {data.get('merkle_root')}")
+                        print(f" • Total Entries: {data.get('total_entries')}\n")
+                elif args.audit_action == "verify":
+                    req = urllib.request.Request(f"{gateway}/v1/audit/verify")
+                    with urllib.request.urlopen(req, timeout=5.0) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        print(f"\n🔐 Merkle Audit Verification (Gateway: {gateway})")
+                        print(f" • Status      : {'VALID ✅' if data.get('valid') else 'TAMPERED / BROKEN 🛑'}")
+                        print(f" • Merkle Root : {data.get('merkle_root')}")
+                        print(f" • Details     : {data.get('reason')}\n")
+                elif args.audit_action == "proof":
+                    req = urllib.request.Request(f"{gateway}/v1/audit/proof/{args.index}")
+                    with urllib.request.urlopen(req, timeout=5.0) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
+                        print(json.dumps(data, indent=2))
+            except Exception as e:
+                print(f"\n❌ Error querying audit gateway: {e}\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))

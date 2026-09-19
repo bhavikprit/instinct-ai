@@ -60,6 +60,17 @@ from reflex.speculative import (
     SpeculativeStatus,
     SpeculativeMetrics,
 )
+from reflex.policy import (
+    PolicyAction,
+    PolicyViolationError,
+    PolicyRule,
+    PolicyRuleSet,
+    PolicyVerdict,
+    PolicyEngine,
+    AuditEntry,
+    MerkleTree,
+    MerkleAuditLog,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -121,6 +132,15 @@ __all__ = [
     "SpeculativeSession",
     "SpeculativeStatus",
     "SpeculativeMetrics",
+    "PolicyAction",
+    "PolicyViolationError",
+    "PolicyRule",
+    "PolicyRuleSet",
+    "PolicyVerdict",
+    "PolicyEngine",
+    "AuditEntry",
+    "MerkleTree",
+    "MerkleAuditLog",
 ]
 
 
