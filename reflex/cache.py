@@ -54,6 +54,9 @@ class InstinctCache:
         encoder: Optional[SemanticVectorEncoder] = None,
         use_hnsw: bool = True,
         use_pq: bool = False,
+        use_ivfpq: bool = False,
+        ivfpq_nlist: int = 64,
+        ivfpq_nprobe: int = 4,
     ):
         self.max_size = max(1, max_size)
         self.similarity_threshold = similarity_threshold
@@ -61,6 +64,9 @@ class InstinctCache:
         self.encoder = encoder or SemanticVectorEncoder()
         self.use_hnsw = use_hnsw
         self.use_pq = use_pq
+        self.use_ivfpq = use_ivfpq
+        self.ivfpq_nlist = ivfpq_nlist
+        self.ivfpq_nprobe = ivfpq_nprobe
 
         # In-memory LRU store: key -> CacheEntry
         self._entries: OrderedDict[str, CacheEntry] = OrderedDict()
@@ -75,6 +81,11 @@ class InstinctCache:
             from reflex.pq import ProductQuantizer, PQConfig, PQIndex
             self._pq_quantizer = ProductQuantizer(PQConfig(dim=384, num_subvectors=48, num_centroids=256))
             self._pq_index = PQIndex(self._pq_quantizer)
+
+        self._ivfpq_index = None
+        if self.use_ivfpq:
+            from reflex.ivfpq import IVFPQIndex, IVFPQConfig
+            self._ivfpq_index = IVFPQIndex(IVFPQConfig(dim=384, nlist=ivfpq_nlist, nprobe=ivfpq_nprobe))
 
         # Telemetry
         self.exact_hits = 0
@@ -230,6 +241,9 @@ class InstinctCache:
             from reflex.pq import ProductQuantizer, PQConfig, PQIndex
             self._pq_quantizer = ProductQuantizer(PQConfig(dim=384, num_subvectors=48, num_centroids=256))
             self._pq_index = PQIndex(self._pq_quantizer)
+        if self.use_ivfpq:
+            from reflex.ivfpq import IVFPQIndex, IVFPQConfig
+            self._ivfpq_index = IVFPQIndex(IVFPQConfig(dim=384, nlist=self.ivfpq_nlist, nprobe=self.ivfpq_nprobe))
         self.exact_hits = 0
         self.semantic_hits = 0
         self.misses = 0
@@ -266,6 +280,8 @@ class InstinctCache:
             "hnsw_indexed_count": len(self._hnsw_index) if self._hnsw_index else 0,
             "use_pq": self.use_pq,
             "pq_indexed_count": len(self._pq_index) if self._pq_index else 0,
+            "use_ivfpq": self.use_ivfpq,
+            "ivfpq_indexed_count": len(self._ivfpq_index) if self._ivfpq_index else 0,
         }
 
     def save_to_file(self, filepath: str):

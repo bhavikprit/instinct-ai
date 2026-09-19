@@ -121,6 +121,11 @@ from reflex.pq import (
     PQIndex,
     PQSearchResult,
 )
+from reflex.ivfpq import (
+    IVFPQConfig,
+    IVFPQIndex,
+    IVFPQSearchResult,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -227,6 +232,9 @@ __all__ = [
     "ProductQuantizer",
     "PQIndex",
     "PQSearchResult",
+    "IVFPQConfig",
+    "IVFPQIndex",
+    "IVFPQSearchResult",
 ]
 
 

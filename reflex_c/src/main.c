@@ -204,6 +204,76 @@ int main(int argc, char** argv) {
     free(pq_codes);
     free(pq_dists);
 
+    // 8. Benchmark Inverted File Product Quantization (IVF-PQ) Operations (Phase 32)
+    printf("8. Inverted File Product Quantization (IVF-PQ) Operations (Phase 32):\n");
+    const int ivf_count = 10000;
+    const int ivf_dim = REFLEX_VECTOR_DIM;
+    const int ivf_nlist = 256;
+    const int ivf_nprobe = 8;
+
+    float* ivf_vecs = (float*)malloc(sizeof(float) * ivf_count * ivf_dim);
+    float* ivf_centroids = (float*)malloc(sizeof(float) * ivf_nlist * ivf_dim);
+    int* ivf_assigns = (int*)malloc(sizeof(int) * ivf_count);
+    float* ivf_residuals = (float*)malloc(sizeof(float) * ivf_count * ivf_dim);
+
+    for (int i = 0; i < ivf_count * ivf_dim; i++) ivf_vecs[i] = ((float)(i % 100)) / 100.0f;
+    for (int i = 0; i < ivf_nlist * ivf_dim; i++) ivf_centroids[i] = ((float)(i % 100)) / 100.0f;
+    for (int i = 0; i < ivf_count; i++) ivf_assigns[i] = i % ivf_nlist;
+
+    // Benchmark residual computation
+    t0 = clock();
+    int res_iters = 500;
+    for (int i = 0; i < res_iters; i++) {
+        reflex_compute_residuals(ivf_vecs, ivf_centroids, ivf_assigns, ivf_count, ivf_dim, ivf_residuals);
+    }
+    t1 = clock();
+    total_sec = (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+    double us_per_residual = (total_sec / ((double)res_iters * ivf_count)) * 1000000.0;
+    printf("   • Residual Computation (10k vecs) : %.3f µs/vector (%.0f vectors/sec)\n",
+           us_per_residual, ((double)res_iters * ivf_count) / total_sec);
+
+    // Benchmark coarse centroid search for queries (1000 queries vs 256 centroids)
+    const int ivf_qcount = 1000;
+    int* query_nearest = (int*)malloc(sizeof(int) * ivf_qcount);
+    t0 = clock();
+    int q_iters = 50;
+    for (int i = 0; i < q_iters; i++) {
+        reflex_find_nearest_centroids(ivf_vecs, ivf_qcount, ivf_centroids, ivf_nlist, ivf_dim, REFLEX_PQ_METRIC_L2, query_nearest);
+    }
+    t1 = clock();
+    total_sec = (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+    double us_per_coarse = (total_sec / ((double)q_iters * ivf_qcount)) * 1000000.0;
+    printf("   • Coarse Centroid Routing (256 lists): %.2f µs/query (%.0f queries/sec)\n",
+           us_per_coarse, ((double)q_iters * ivf_qcount) / total_sec);
+
+    // Benchmark pruned IVF list scan (nprobe=8 lists out of 256 -> ~312 vectors scanned instead of 10,000)
+    int pruned_scan_count = (ivf_count * ivf_nprobe) / ivf_nlist;
+    uint8_t* pruned_codes = (uint8_t*)malloc(sizeof(uint8_t) * pruned_scan_count * pq_M);
+    float* pruned_dists = (float*)malloc(sizeof(float) * pruned_scan_count);
+    float* single_lut = (float*)malloc(sizeof(float) * pq_M * pq_K);
+    for (int i = 0; i < pq_M * pq_K; i++) single_lut[i] = ((float)(i % 50)) / 50.0f;
+    for (int i = 0; i < pruned_scan_count * pq_M; i++) pruned_codes[i] = (uint8_t)(i % pq_K);
+
+    t0 = clock();
+    int ivf_search_iters = 10000;
+    for (int i = 0; i < ivf_search_iters; i++) {
+        reflex_batch_adc_dist_u8(single_lut, pruned_codes, pruned_scan_count, pq_M, pq_K, pruned_dists);
+    }
+    t1 = clock();
+    total_sec = (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+    double us_per_ivf_search = (total_sec / (double)ivf_search_iters) * 1000000.0;
+    printf("   • Pruned Inverted List Scan (nprobe=8) : %.2f µs/query (%d vecs scanned, %.1fx search speedup!)\n\n",
+           us_per_ivf_search, pruned_scan_count, (double)ivf_count / (double)pruned_scan_count);
+
+    free(ivf_vecs);
+    free(ivf_centroids);
+    free(ivf_assigns);
+    free(ivf_residuals);
+    free(query_nearest);
+    free(pruned_codes);
+    free(pruned_dists);
+    free(single_lut);
+
     printf("✅ All native C99 tests completed successfully with zero memory errors!\n");
     return 0;
 }

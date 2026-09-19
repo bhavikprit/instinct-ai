@@ -95,6 +95,48 @@ void reflex_assign_centroids_subvector(
     int* out_assignments
 );
 
+/**
+ * Computes residuals r = vector - centroid for a batch of vectors (Phase 32).
+ * Accelerates IVF-PQ encoding.
+ *
+ * vectors: contiguous float array of shape (count * dim)
+ * centroids: contiguous float array of shape (num_centroids * dim)
+ * assignments: int array of shape count, where assignments[i] is the centroid index for vector i
+ * count: number of vectors
+ * dim: vector dimension (e.g. 384)
+ * residuals_out: output float array of shape (count * dim)
+ */
+void reflex_compute_residuals(
+    const float* vectors,
+    const float* centroids,
+    const int* assignments,
+    int count,
+    int dim,
+    float* residuals_out
+);
+
+/**
+ * Finds the nearest centroid for each vector in a batch using L2 or Cosine distance (Phase 32).
+ * Accelerates coarse quantizer assignment in IVF-PQ.
+ *
+ * vectors: contiguous float array of shape (count * dim)
+ * count: number of vectors
+ * centroids: contiguous float array of shape (num_centroids * dim)
+ * num_centroids: number of coarse centroids (e.g. 256)
+ * dim: vector dimension (e.g. 384)
+ * metric: 0 for cosine distance, 1 for squared L2 distance
+ * out_assignments: output int array of length count
+ */
+void reflex_find_nearest_centroids(
+    const float* vectors,
+    int count,
+    const float* centroids,
+    int num_centroids,
+    int dim,
+    int metric,
+    int* out_assignments
+);
+
 #ifdef __cplusplus
 }
 #endif

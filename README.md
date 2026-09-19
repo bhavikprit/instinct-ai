@@ -1267,6 +1267,15 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Seamless `InstinctCache` integration (`use_pq=True`) providing high-volume dual-brain memory scaling
    - [x] CLI diagnostics & benchmarking commands (`reflex pq info`, `reflex pq benchmark`)
    - [x] 16-test suite verification (`tests/test_pq.py`) and 5,000-vector live demonstration (`examples/31_million_scale_product_quantization.py`)
+ - [x] **Phase 32: Inverted File Product Quantization (IVF-PQ) & Hybrid HNSW-PQ Scaling (`reflex.ivfpq`)**
+   - [x] Space partitioning into coarse Voronoi cells ($n_{\text{list}}$) with residual Product Quantization ($M=48$)
+   - [x] Pruned inverted list search ($n_{\text{probe}}$) pruning 95%–98.5% of vectors from the search space
+   - [x] Native C99 SIMD kernels (`reflex_compute_residuals`, `reflex_find_nearest_centroids`, `reflex_batch_adc_dist_u8`)
+   - [x] Hybrid logarithmic HNSW coarse centroid routing for large codebooks ($n_{\text{list}} \ge 512$)
+   - [x] Zero-dependency binary persistence format (`.reflex-ivfpq`, magic `RFIV`, 32-bit CRC32 integrity trailer)
+   - [x] Seamless `InstinctCache` integration (`use_ivfpq=True`) for ultra-high-capacity memory
+   - [x] CLI inspection and benchmarking tools (`reflex ivfpq info`, `reflex ivfpq benchmark`)
+   - [x] 16-test suite verification (`tests/test_ivfpq.py`) and 10,000-vector live demonstration (`examples/32_billion_scale_ivf_pq_memory.py`)
 
 
 ---

@@ -350,6 +350,21 @@ def main():
     pq_bench.add_argument("--queries", type=int, default=100, help="Number of benchmark search queries (default: 100)")
     pq_bench.add_argument("--k", type=int, default=5, help="Top-K neighbors to retrieve (default: 5)")
 
+    # Command: ivfpq (Inverted File Product Quantization - Phase 32)
+    ivfpq_parser = subparsers.add_parser("ivfpq", help="Inspect and benchmark Inverted File Product Quantization (IVF-PQ)")
+    ivfpq_sub = ivfpq_parser.add_subparsers(dest="ivfpq_action", required=True)
+
+    ivfpq_info = ivfpq_sub.add_parser("info", help="Inspect .reflex-ivfpq binary artifact")
+    ivfpq_info.add_argument("path", help="Path to .reflex-ivfpq file")
+
+    ivfpq_bench = ivfpq_sub.add_parser("benchmark", help="Benchmark IVF-PQ pruned list retrieval and speedup")
+    ivfpq_bench.add_argument("--nodes", type=int, default=10000, help="Number of vectors to index (default: 10,000)")
+    ivfpq_bench.add_argument("--dim", type=int, default=384, help="Vector dimension (default: 384)")
+    ivfpq_bench.add_argument("--nlist", type=int, default=64, help="Number of coarse Voronoi lists (default: 64)")
+    ivfpq_bench.add_argument("--nprobe", type=int, default=4, help="Number of coarse lists to probe (default: 4)")
+    ivfpq_bench.add_argument("--queries", type=int, default=100, help="Number of benchmark search queries (default: 100)")
+    ivfpq_bench.add_argument("--k", type=int, default=5, help="Top-K neighbors to retrieve (default: 5)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -1078,6 +1093,90 @@ def main():
                 recalls.append(len(a_ids.intersection(e_ids)) / float(args.k))
             avg_recall = sum(recalls) / len(recalls)
             print(f"   • Recall@{args.k}       : {avg_recall * 100:.1f}%\n")
+            print("=" * 65 + "\n")
+    elif args.command == "ivfpq":
+        from reflex.ivfpq import IVFPQConfig, IVFPQIndex
+        if args.ivfpq_action == "info":
+            if not os.path.exists(args.path):
+                print(f"❌ File not found: {args.path}")
+                sys.exit(1)
+            try:
+                idx = IVFPQIndex.load(args.path)
+                st = idx.stats()
+                print("\n" + "=" * 60)
+                print("⚡ Reflex IVF-PQ Vector Index (.reflex-ivfpq)")
+                print("=" * 60)
+                print(f" • File Path          : {args.path}")
+                print(f" • File Size          : {os.path.getsize(args.path):,} bytes")
+                print(f" • Total Vectors      : {st['total_vectors']:,}")
+                print(f" • Vector Dimension   : {st['dimension']}")
+                print(f" • Coarse Centroids   : {st['nlist']} Voronoi cells")
+                print(f" • Default Probes     : {st['nprobe']} lists ({st['pruning_ratio_percent']}% pruned)")
+                print(f" • Sub-quantizers (M) : {st['M']} (48 B/vector)")
+                print(f" • Empty Lists        : {st['empty_lists']}")
+                print(f" • List Length (mean) : {st['list_length_mean']} (min: {st['list_length_min']}, max: {st['list_length_max']})")
+                print(f" • Imbalance Factor   : {st['imbalance_factor']}x")
+                print(f" • Memory Compressed  : {st['memory_compressed_kb']} KB")
+                print(f" • FP32 Equivalent    : {st['memory_raw_fp32_kb']} KB")
+                print(f" • Compression Ratio  : {st['compression_ratio']}x RAM reduction")
+                print(f" • Native C SIMD      : {'ACTIVE ⚡' if st['native_accelerated'] else 'Pure Python'}")
+                print(f" • Coarse HNSW Router : {'ACTIVE ⚡' if st['use_hnsw_coarse'] else 'Flat Scan'}")
+                print("=" * 60 + "\n")
+            except Exception as e:
+                print(f"❌ Error inspecting IVFPQ index: {e}")
+                sys.exit(1)
+        elif args.ivfpq_action == "benchmark":
+            import random
+            import time
+            print("\n" + "=" * 65)
+            print("⚡ Reflex Inverted File Product Quantization (IVF-PQ) Benchmark")
+            print("=" * 65)
+            print(f" • Vectors to Index  : {args.nodes}")
+            print(f" • Dimension         : {args.dim}")
+            print(f" • Voronoi Lists     : {args.nlist}")
+            print(f" • Probed Lists      : {args.nprobe} (prunes {(1.0 - args.nprobe/args.nlist)*100:.1f}% of search space)")
+            print(f" • Query Count       : {args.queries}")
+            print(f" • Top-K             : {args.k}\n")
+
+            rng = random.Random(42)
+            print("1. Training Coarse Centroids & Residual Codebook (500 vectors)...")
+            train_data = [[rng.uniform(-1.0, 1.0) for _ in range(args.dim)] for _ in range(500)]
+            cfg = IVFPQConfig(dim=args.dim, nlist=args.nlist, nprobe=args.nprobe, M=48, K=256)
+            ivf_index = IVFPQIndex(cfg)
+
+            t0 = time.perf_counter()
+            ivf_index.train(train_data, max_coarse_iters=10, max_sub_iters=8)
+            t1 = time.perf_counter()
+            print(f"   • Training Time : {(t1 - t0) * 1000.0:.1f} ms")
+            print(f"   • SIMD Active   : {'YES ⚡' if ivf_index.is_native_accelerated else 'NO'}\n")
+
+            print(f"2. Ingesting {args.nodes} vectors into {args.nlist} inverted lists...")
+            dataset = [[rng.uniform(-1.0, 1.0) for _ in range(args.dim)] for _ in range(args.nodes)]
+            t0 = time.perf_counter()
+            for i, vec in enumerate(dataset):
+                ivf_index.insert(vec, payload={"id": i})
+            t1 = time.perf_counter()
+            ingest_sec = t1 - t0
+
+            st = ivf_index.stats()
+            print(f"   • Ingest Time   : {ingest_sec * 1000.0:.1f} ms ({args.nodes / ingest_sec:.0f} vectors/sec)")
+            print(f"   • IVF-PQ Memory : {st['memory_compressed_kb']} KB")
+            print(f"   • FP32 Memory   : {st['memory_raw_fp32_kb']} KB")
+            print(f"   • Compression   : {st['compression_ratio']}x RAM reduction 🚀\n")
+
+            queries = [[rng.uniform(-1.0, 1.0) for _ in range(args.dim)] for _ in range(args.queries)]
+
+            print(f"3. Running Pruned IVF-PQ Search ({args.queries} queries)...")
+            t0 = time.perf_counter()
+            ivf_results = []
+            for q in queries:
+                ivf_results.append(ivf_index.search(q, k=args.k, nprobe=args.nprobe))
+            t1 = time.perf_counter()
+            ivf_sec = t1 - t0
+            ivf_us_per_q = (ivf_sec / args.queries) * 1_000_000.0
+            ivf_qps = args.queries / ivf_sec
+            print(f"   • Latency       : {ivf_us_per_q:.2f} µs/query")
+            print(f"   • Throughput    : {ivf_qps:.0f} QPS\n")
             print("=" * 65 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
