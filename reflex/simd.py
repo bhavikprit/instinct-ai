@@ -359,7 +359,11 @@ class SimdEngine:
         words_b = struct.unpack("<6Q", bits_b)
         dist = 0
         for wa, wb in zip(words_a, words_b):
-            dist += (wa ^ wb).bit_count()
+            diff = wa ^ wb
+            if hasattr(diff, "bit_count"):
+                dist += diff.bit_count()
+            else:
+                dist += bin(diff).count("1")
         return dist
 
     def binary_similarity_384(self, bits_a: bytes, bits_b: bytes) -> float:
