@@ -255,12 +255,13 @@ class ClusterMiner:
         self,
         prompts: List[str],
         k: Optional[int] = None,
-        min_cluster_size: int = 2,
-        max_iterations: int = 20,
+        min_cluster_size: int = 1,
+        max_iterations: int = 25,
+        seed: Optional[int] = 42,
     ) -> List[MinedCluster]:
         """
         Clusters a collection of prompt utterances into k intent clusters.
-        If k is None, chooses optimal k automatically (2 to min(5, N/2)).
+        Uses deterministic seeding and reassigns orphan points to preserve sample volume.
         """
         unique_prompts = list(dict.fromkeys(p.strip() for p in prompts if p.strip()))
         n = len(unique_prompts)
@@ -272,25 +273,26 @@ class ClusterMiner:
             k = max(2, min(5, n // 3))
         k = max(2, min(k, n))
 
+        rng = random.Random(seed if seed is not None else 42)
+
         # 1. Project prompts into 384-dimensional normalized vectors
         vectors = [self.encoder.encode(p) for p in unique_prompts]
         dim = len(vectors[0])
 
-        # 2. Initialize centroids using k-means++ spread heuristic
+        # 2. Initialize centroids using k-means++ spread heuristic with seeded rng
         centroids: List[List[float]] = []
-        centroids.append(vectors[random.randint(0, n - 1)])
+        centroids.append(vectors[rng.randint(0, n - 1)])
 
         for _ in range(1, k):
-            # Compute distance to nearest chosen centroid for each point
             dists = []
             for v in vectors:
                 min_dist = min(2.0 - 2.0 * self._dot(v, c) for c in centroids)
                 dists.append(max(0.0, min_dist))
             total_d = sum(dists)
             if total_d <= 0.0:
-                centroids.append(vectors[random.randint(0, n - 1)])
+                centroids.append(vectors[rng.randint(0, n - 1)])
                 continue
-            r = random.random() * total_d
+            r = rng.random() * total_d
             cum = 0.0
             chosen = vectors[0]
             for v, d in zip(vectors, dists):
@@ -303,7 +305,6 @@ class ClusterMiner:
         # 3. Iterative k-means optimization
         assignments = [0] * n
         for _ in range(max_iterations):
-            # Assignment step: maximize cosine similarity
             changed = False
             for i, v in enumerate(vectors):
                 best_sim = -2.0
@@ -320,7 +321,6 @@ class ClusterMiner:
             if not changed:
                 break
 
-            # Update step: recompute centroids as mean of assigned vectors
             for c_idx in range(k):
                 cluster_members = [vectors[i] for i in range(n) if assignments[i] == c_idx]
                 if not cluster_members:
@@ -329,34 +329,48 @@ class ClusterMiner:
                 for vec in cluster_members:
                     for d_idx in range(dim):
                         mean_v[d_idx] += vec[d_idx]
-                # Normalize to unit length
                 norm = math.sqrt(sum(x * x for x in mean_v)) or 1.0
                 centroids[c_idx] = [x / norm for x in mean_v]
 
-        # 4. Extract cluster metadata, coherence, and exemplars
-        clusters: List[MinedCluster] = []
-        for c_idx in range(k):
-            member_indices = [i for i, a in enumerate(assignments) if a == c_idx]
-            if len(member_indices) < min_cluster_size:
-                continue
+        # 4. Extract cluster metadata and reassign any orphan points
+        cluster_groups: Dict[int, List[int]] = defaultdict(list)
+        for i, a in enumerate(assignments):
+            cluster_groups[a].append(i)
 
+        surviving = [c for c, m in cluster_groups.items() if len(m) >= min_cluster_size]
+        if not surviving:
+            surviving = list(cluster_groups.keys())
+
+        # Reassign orphans to nearest surviving cluster
+        for c_idx, members in list(cluster_groups.items()):
+            if c_idx not in surviving:
+                for i in members:
+                    v = vectors[i]
+                    best_c = surviving[0]
+                    best_sim = -2.0
+                    for sc in surviving:
+                        sim = self._dot(v, centroids[sc])
+                        if sim > best_sim:
+                            best_sim = sim
+                            best_c = sc
+                    cluster_groups[best_c].append(i)
+                del cluster_groups[c_idx]
+
+        clusters: List[MinedCluster] = []
+        for out_id, (c_idx, member_indices) in enumerate(cluster_groups.items()):
             member_prompts = [unique_prompts[i] for i in member_indices]
             member_vectors = [vectors[i] for i in member_indices]
 
-            # Compute similarities to centroid
             c_vec = centroids[c_idx]
             sims = [self._dot(v, c_vec) for v in member_vectors]
             coherence = sum(sims) / len(sims) if sims else 0.0
 
-            # Find exemplars: top 3 prompts closest to centroid
             ranked = sorted(zip(member_prompts, sims), key=lambda x: x[1], reverse=True)
             exemplars = [p for p, _ in ranked[:3]]
-
-            # Derive representative label from top distinctive keywords
-            label = self._derive_label(c_idx, member_prompts)
+            label = self._derive_label(out_id, member_prompts)
 
             clusters.append(MinedCluster(
-                cluster_id=c_idx,
+                cluster_id=out_id,
                 label=label,
                 centroid=c_vec,
                 size=len(member_prompts),
