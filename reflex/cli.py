@@ -336,6 +336,20 @@ def main():
     index_bench.add_argument("--queries", type=int, default=100, help="Number of benchmark search queries (default: 100)")
     index_bench.add_argument("--k", type=int, default=5, help="Top-K neighbors to retrieve (default: 5)")
 
+    # Command: pq (Product Quantization & Asymmetric Distance Computation - Phase 31)
+    pq_parser = subparsers.add_parser("pq", help="Inspect and benchmark Product Quantization and Asymmetric Distance Computation")
+    pq_sub = pq_parser.add_subparsers(dest="pq_action", required=True)
+
+    pq_info = pq_sub.add_parser("info", help="Inspect .reflex-pq codebook or .reflex-pq-index binary artifact")
+    pq_info.add_argument("path", help="Path to .reflex-pq or .reflex-pq-index file")
+
+    pq_bench = pq_sub.add_parser("benchmark", help="Benchmark Product Quantization ADC memory compression and throughput")
+    pq_bench.add_argument("--nodes", type=int, default=10000, help="Number of vectors to index (default: 10,000)")
+    pq_bench.add_argument("--dim", type=int, default=384, help="Vector dimension (default: 384)")
+    pq_bench.add_argument("--subvectors", type=int, default=48, help="Number of sub-vectors (default: 48)")
+    pq_bench.add_argument("--queries", type=int, default=100, help="Number of benchmark search queries (default: 100)")
+    pq_bench.add_argument("--k", type=int, default=5, help="Top-K neighbors to retrieve (default: 5)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -939,6 +953,129 @@ def main():
 
             print("4. Calculating Recall@K...")
             recalls = [index.compute_recall(q, k=args.k) for q in queries[:20]]
+            avg_recall = sum(recalls) / len(recalls)
+            print(f"   • Recall@{args.k}       : {avg_recall * 100:.1f}%\n")
+            print("=" * 65 + "\n")
+    elif args.command == "pq":
+        from reflex.pq import PQConfig, ProductQuantizer, PQIndex
+        if args.pq_action == "info":
+            if not os.path.exists(args.path):
+                print(f"❌ Error: File '{args.path}' not found.")
+                sys.exit(1)
+            size_kb = os.path.getsize(args.path) / 1024.0
+            print("\n" + "=" * 65)
+            print(f"📦 Reflex Product Quantization Artifact: {os.path.basename(args.path)}")
+            print("=" * 65)
+            print(f" • File Size         : {size_kb:.1f} KB")
+
+            # Try loading as PQIndex or ProductQuantizer
+            try:
+                pq_idx = PQIndex.load(args.path)
+                st = pq_idx.stats()
+                print(f" • Artifact Type     : PQ Vector Index (.reflex-pq-index)")
+                print(f" • Vector Count      : {st['vector_count']}")
+                print(f" • Dimension         : {st['dimension']}")
+                print(f" • Sub-vectors (M)   : {st['num_subvectors']}")
+                print(f" • Bytes/Vector      : {st['bytes_per_vector']} bytes")
+                print(f" • Memory (PQ)       : {st['memory_compressed_kb']} KB")
+                print(f" • Memory (FP32)     : {st['memory_raw_fp32_kb']} KB")
+                print(f" • Compression Ratio : {st['compression_ratio']:.1f}x")
+                print(f" • SIMD Accelerated  : {'YES ⚡' if st['native_accelerated'] else 'NO (Pure Python)'}")
+            except Exception:
+                try:
+                    quantizer = ProductQuantizer.load(args.path)
+                    cfg = quantizer.config
+                    print(f" • Artifact Type     : PQ Codebook (.reflex-pq)")
+                    print(f" • Dimension         : {cfg.dim}")
+                    print(f" • Sub-vectors (M)   : {cfg.num_subvectors} (d_sub={cfg.d_sub})")
+                    print(f" • Centroids (K)     : {cfg.num_centroids}")
+                    print(f" • Metric            : {cfg.metric}")
+                    print(f" • Compression Ratio : {cfg.compression_ratio:.1f}x")
+                    print(f" • SIMD Accelerated  : {'YES ⚡' if quantizer.is_native_accelerated else 'NO'}")
+                except Exception as e:
+                    print(f"❌ Error parsing PQ artifact: {e}")
+                    sys.exit(1)
+            print("=" * 65 + "\n")
+        elif args.pq_action == "benchmark":
+            import random
+            import time
+            print("\n" + "=" * 65)
+            print(f"⚡ Reflex Product Quantization (PQ & ADC) Memory Benchmark")
+            print("=" * 65)
+            print(f" • Vectors to Index  : {args.nodes}")
+            print(f" • Dimension         : {args.dim}")
+            print(f" • Sub-vectors (M)   : {args.subvectors} (d_sub={args.dim // args.subvectors})")
+            print(f" • Query Count       : {args.queries}")
+            print(f" • Top-K             : {args.k}\n")
+
+            rng = random.Random(42)
+            print(f"1. Training Sub-Vector Codebooks (500 training vectors)...")
+            train_data = [[rng.uniform(-1.0, 1.0) for _ in range(args.dim)] for _ in range(500)]
+            cfg = PQConfig(dim=args.dim, num_subvectors=args.subvectors, num_centroids=256)
+            pq = ProductQuantizer(cfg)
+
+            t0 = time.perf_counter()
+            pq.train(train_data, max_iters=10)
+            t1 = time.perf_counter()
+            print(f"   • Training Time : {(t1 - t0) * 1000.0:.1f} ms")
+            print(f"   • SIMD Active   : {'YES ⚡' if pq.is_native_accelerated else 'NO'}\n")
+
+            print(f"2. Quantizing & Indexing {args.nodes} vectors into 48-byte codes...")
+            dataset = [[rng.uniform(-1.0, 1.0) for _ in range(args.dim)] for _ in range(args.nodes)]
+            pq_index = PQIndex(pq)
+
+            t0 = time.perf_counter()
+            for i, vec in enumerate(dataset):
+                pq_index.insert(vec, payload={"id": i})
+            t1 = time.perf_counter()
+            encode_sec = t1 - t0
+
+            st = pq_index.stats()
+            print(f"   • Encode Time   : {encode_sec * 1000.0:.1f} ms ({args.nodes / encode_sec:.0f} vectors/sec)")
+            print(f"   • PQ Memory     : {st['memory_compressed_kb']} KB ({st['bytes_per_vector']} B/vector)")
+            print(f"   • FP32 Memory   : {st['memory_raw_fp32_kb']} KB (1,536 B/vector)")
+            print(f"   • Compression   : {st['compression_ratio']:.1f}x RAM Reduction 🚀\n")
+
+            queries = [[rng.uniform(-1.0, 1.0) for _ in range(args.dim)] for _ in range(args.queries)]
+
+            print(f"3. Running Multiplier-Free ADC Search ({args.queries} queries)...")
+            t0 = time.perf_counter()
+            adc_results = []
+            for q in queries:
+                adc_results.append(pq_index.search(q, k=args.k))
+            t1 = time.perf_counter()
+            adc_sec = t1 - t0
+            adc_us_per_q = (adc_sec / args.queries) * 1_000_000.0
+            adc_qps = args.queries / adc_sec
+
+            print(f"   • Latency       : {adc_us_per_q:.2f} µs/query")
+            print(f"   • Throughput    : {adc_qps:.0f} QPS\n")
+
+            print(f"4. Running Exact FP32 Brute-Force Search ({args.queries} queries)...")
+            from reflex.index import HNSWIndex, HNSWConfig
+            exact_index = HNSWIndex(HNSWConfig(dim=args.dim))
+            for i, vec in enumerate(dataset):
+                exact_index.insert(vec, payload={"id": i})
+
+            t0 = time.perf_counter()
+            exact_results = []
+            for q in queries:
+                exact_results.append(exact_index.exact_brute_force_search(q, k=args.k))
+            t1 = time.perf_counter()
+            exact_sec = t1 - t0
+            exact_us_per_q = (exact_sec / args.queries) * 1_000_000.0
+            exact_qps = args.queries / exact_sec
+
+            print(f"   • Latency       : {exact_us_per_q:.2f} µs/query")
+            print(f"   • Throughput    : {exact_qps:.0f} QPS")
+            print(f"   • Speedup       : {exact_sec / adc_sec:.1f}x faster than FP32 scan\n")
+
+            print("5. Calculating ADC Recall@K vs FP32 Ground Truth...")
+            recalls = []
+            for adc_res, ex_res in zip(adc_results, exact_results):
+                a_ids = {r.node_id for r in adc_res}
+                e_ids = {r.node_id for r in ex_res}
+                recalls.append(len(a_ids.intersection(e_ids)) / float(args.k))
             avg_recall = sum(recalls) / len(recalls)
             print(f"   • Recall@{args.k}       : {avg_recall * 100:.1f}%\n")
             print("=" * 65 + "\n")

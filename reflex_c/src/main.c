@@ -5,6 +5,7 @@
 
 #include "reflex.h"
 #include "reflex_hnsw.h"
+#include "reflex_pq.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -166,6 +167,42 @@ int main(int argc, char** argv) {
 
     free(batch_vectors);
     free(batch_out);
+
+    // 7. Benchmark Product Quantization & Asymmetric Distance Computation (Phase 31)
+    printf("7. Product Quantization & Asymmetric Distance Computation (Phase 31):\n");
+    const int pq_M = 48;
+    const int pq_dsub = 8;
+    (void)pq_dsub;
+    const int pq_K = 256;
+    const int pq_count = 10000;
+
+    float* pq_lut = (float*)malloc(sizeof(float) * pq_M * pq_K);
+    uint8_t* pq_codes = (uint8_t*)malloc(sizeof(uint8_t) * pq_count * pq_M);
+    float* pq_dists = (float*)malloc(sizeof(float) * pq_count);
+
+    for (int i = 0; i < pq_M * pq_K; i++) pq_lut[i] = ((float)(i % 50)) / 50.0f;
+    for (int i = 0; i < pq_count * pq_M; i++) pq_codes[i] = (uint8_t)(i % pq_K);
+
+    t0 = clock();
+    int adc_iters = 1000;
+    for (int i = 0; i < adc_iters; i++) {
+        reflex_batch_adc_dist_u8(pq_lut, pq_codes, pq_count, pq_M, pq_K, pq_dists);
+    }
+    t1 = clock();
+    total_sec = (double)(t1 - t0) / (double)CLOCKS_PER_SEC;
+    double us_per_adc_batch = (total_sec / adc_iters) * 1000000.0;
+    double ops_per_sec_adc = ((double)adc_iters * pq_count) / total_sec;
+    double memory_mb = (double)(pq_count * pq_M) / (1024.0 * 1024.0);
+    double fp32_mb = (double)(pq_count * REFLEX_VECTOR_DIM * sizeof(float)) / (1024.0 * 1024.0);
+
+    printf("   • ADC Batch Distance (%d vecs) : %.2f µs/batch (%.0f vector-lookups/sec)\n",
+           pq_count, us_per_adc_batch, ops_per_sec_adc);
+    printf("   • Memory Footprint (10k vecs) : %.2f MB vs %.2f MB FP32 (%.1fx compression!)\n\n",
+           memory_mb, fp32_mb, fp32_mb / memory_mb);
+
+    free(pq_lut);
+    free(pq_codes);
+    free(pq_dists);
 
     printf("✅ All native C99 tests completed successfully with zero memory errors!\n");
     return 0;

@@ -53,12 +53,14 @@ class InstinctCache:
         ttl_seconds: Optional[float] = None,
         encoder: Optional[SemanticVectorEncoder] = None,
         use_hnsw: bool = True,
+        use_pq: bool = False,
     ):
         self.max_size = max(1, max_size)
         self.similarity_threshold = similarity_threshold
         self.ttl_seconds = ttl_seconds
         self.encoder = encoder or SemanticVectorEncoder()
         self.use_hnsw = use_hnsw
+        self.use_pq = use_pq
 
         # In-memory LRU store: key -> CacheEntry
         self._entries: OrderedDict[str, CacheEntry] = OrderedDict()
@@ -66,6 +68,13 @@ class InstinctCache:
         if self.use_hnsw:
             from reflex.index import HNSWIndex, HNSWConfig
             self._hnsw_index = HNSWIndex(HNSWConfig(dim=384, ef_search=32, ef_construction=64))
+
+        self._pq_quantizer = None
+        self._pq_index = None
+        if self.use_pq:
+            from reflex.pq import ProductQuantizer, PQConfig, PQIndex
+            self._pq_quantizer = ProductQuantizer(PQConfig(dim=384, num_subvectors=48, num_centroids=256))
+            self._pq_index = PQIndex(self._pq_quantizer)
 
         # Telemetry
         self.exact_hits = 0
@@ -217,6 +226,10 @@ class InstinctCache:
         if self.use_hnsw:
             from reflex.index import HNSWIndex, HNSWConfig
             self._hnsw_index = HNSWIndex(HNSWConfig(dim=384, ef_search=32, ef_construction=64))
+        if self.use_pq:
+            from reflex.pq import ProductQuantizer, PQConfig, PQIndex
+            self._pq_quantizer = ProductQuantizer(PQConfig(dim=384, num_subvectors=48, num_centroids=256))
+            self._pq_index = PQIndex(self._pq_quantizer)
         self.exact_hits = 0
         self.semantic_hits = 0
         self.misses = 0
@@ -251,6 +264,8 @@ class InstinctCache:
             "latency_saved_ms": round(self.latency_saved_ms, 2),
             "use_hnsw": self.use_hnsw,
             "hnsw_indexed_count": len(self._hnsw_index) if self._hnsw_index else 0,
+            "use_pq": self.use_pq,
+            "pq_indexed_count": len(self._pq_index) if self._pq_index else 0,
         }
 
     def save_to_file(self, filepath: str):

@@ -22,11 +22,11 @@ all: $(LIB_TARGET) $(BENCH_TARGET)
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(LIB_TARGET): src/reflex.c src/reflex_simd.c src/reflex_hnsw.c include/reflex.h include/reflex_simd.h include/reflex_hnsw.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) $(SHARED_FLAGS) src/reflex.c src/reflex_simd.c src/reflex_hnsw.c -o $(LIB_TARGET) $(LDFLAGS)
+$(LIB_TARGET): src/reflex.c src/reflex_simd.c src/reflex_hnsw.c src/reflex_pq.c include/reflex.h include/reflex_simd.h include/reflex_hnsw.h include/reflex_pq.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(SHARED_FLAGS) src/reflex.c src/reflex_simd.c src/reflex_hnsw.c src/reflex_pq.c -o $(LIB_TARGET) $(LDFLAGS)
 
-$(BENCH_TARGET): src/main.c src/reflex.c src/reflex_simd.c src/reflex_hnsw.c include/reflex.h include/reflex_simd.h include/reflex_hnsw.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) src/main.c src/reflex.c src/reflex_simd.c src/reflex_hnsw.c -o $(BENCH_TARGET) $(LDFLAGS)
+$(BENCH_TARGET): src/main.c src/reflex.c src/reflex_simd.c src/reflex_hnsw.c src/reflex_pq.c include/reflex.h include/reflex_simd.h include/reflex_hnsw.h include/reflex_pq.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) src/main.c src/reflex.c src/reflex_simd.c src/reflex_hnsw.c src/reflex_pq.c -o $(BENCH_TARGET) $(LDFLAGS)
 
 test: $(BENCH_TARGET)
 	./$(BENCH_TARGET)

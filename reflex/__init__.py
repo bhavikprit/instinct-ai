@@ -115,6 +115,12 @@ from reflex.index import (
     HNSWNode,
     SearchResult,
 )
+from reflex.pq import (
+    PQConfig,
+    ProductQuantizer,
+    PQIndex,
+    PQSearchResult,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -217,6 +223,10 @@ __all__ = [
     "HNSWConfig",
     "HNSWNode",
     "SearchResult",
+    "PQConfig",
+    "ProductQuantizer",
+    "PQIndex",
+    "PQSearchResult",
 ]
 
 
