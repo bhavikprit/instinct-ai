@@ -1358,6 +1358,18 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Seamless `Reflex(cascade=...)` runtime integration with `result.cascade` and `rx.record_cascade_feedback`
    - [x] CLI inspection and Pareto cost-risk curve benchmarking tools (`reflex cascade info`, `reflex cascade benchmark`)
    - [x] 31-test suite verification (`tests/test_cascade.py`) and live 3-tier production simulation (`examples/40_cost_aware_dual_brain_cascade.py`)
+ - [x] **Phase 41: Real-Time Concept Drift & Out-of-Distribution (OOD) Guard (`reflex.drift`)**
+   - [x] Sub-50µs unsupervised distribution shift detection & geometric OOD guards on streaming semantic vectors
+   - [x] Streaming Maximum Mean Discrepancy (MMD) two-sample hypothesis testing via Random Fourier Features (RFF) with asymptotic Chi-squared distribution bounds
+   - [x] Streaming Population Stability Index (PSI) over reference quantile partitions with Laplace count smoothing
+   - [x] Geometry-aware Out-of-Distribution (OOD) scoring via Mahalanobis, Cosine Centroid, or Euclidean distance metrics
+   - [x] Finite-sample percentile threshold calibration ($\tau_{\text{ood}}$) for strict false-positive rate control (e.g. 95% CI)
+   - [x] Automated System-2 deliberation escalation (`result.should_escalate = True`) on anomalous or out-of-distribution queries
+   - [x] Real-time drift detection callbacks (`on_drift_detected`) triggering automated alerts and continuous active learning ingestion
+   - [x] Zero-dependency binary persistence format (`.reflex-drift`, magic `RFDF`, 56-byte structured header, 32-bit CRC32 trailer)
+   - [x] Seamless `Reflex(drift_guard=...)` runtime integration at Step 12 of `evaluate()` and `rx.record_drift_sample`
+   - [x] CLI inspection and multi-regime streaming benchmark (`reflex drift info`, `reflex drift benchmark`)
+   - [x] 31-test suite verification (`tests/test_drift.py`) and live 3-regime production simulation (`examples/41_realtime_concept_drift_ood_guard.py`)
 
 
 ---

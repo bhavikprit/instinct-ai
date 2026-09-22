@@ -78,6 +78,7 @@ class Reflex:
         venn_abers: Optional[Any] = None,
         selective_reject: Optional[Any] = None,
         cascade: Optional[Any] = None,
+        drift_guard: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -102,6 +103,12 @@ class Reflex:
             self.cascade = CascadeRouter()
         else:
             self.cascade = cascade
+
+        if drift_guard is True:
+            from reflex.drift import DriftGuard
+            self.drift_guard = DriftGuard()
+        else:
+            self.drift_guard = drift_guard
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -562,6 +569,16 @@ class Reflex:
                 # Escalated through to terminal tier
                 result.should_escalate = True
 
+        # 12. Real-Time Concept Drift & Out-of-Distribution Guard (Phase 41)
+        if self.drift_guard is not None and getattr(self.drift_guard, "is_fitted", False):
+            drift_input = state
+            if isinstance(state, dict):
+                drift_input = " ".join(f"{k} {v}" for k, v in state.items())
+            drift_res = self.drift_guard.evaluate(drift_input)
+            result.drift = drift_res
+            if drift_res.is_ood:
+                result.should_escalate = True
+
         return result
 
     def audit_root(self) -> Optional[str]:
@@ -740,6 +757,18 @@ class Reflex:
         """
         if self.cascade is not None:
             self.cascade.add_sample(tier_scores, tier_errors)
+
+    def record_drift_sample(
+        self,
+        sample: Union[str, Sequence[float]],
+    ) -> Optional[Any]:
+        """
+        Records an evaluation sample to update streaming drift metrics (Phase 41).
+        Can be used to feed background traffic without running the full decision pipeline.
+        """
+        if self.drift_guard is not None and getattr(self.drift_guard, "is_fitted", False):
+            return self.drift_guard.evaluate(sample)
+        return None
 
     def sync_fleet(self) -> Dict[str, Any]:
         """Pings all fleet peers and returns cluster connectivity metrics."""

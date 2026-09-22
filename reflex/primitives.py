@@ -168,6 +168,7 @@ class DecisionResult:
     venn_abers: Optional[Dict[str, Any]] = None
     rejection: Optional[Dict[str, Any]] = None
     cascade: Optional[Dict[str, Any]] = None
+    drift: Optional[Dict[str, Any]] = None
     should_escalate: bool = False
 
     def __getitem__(self, key: str) -> PrimitiveType:
@@ -234,6 +235,8 @@ class DecisionResult:
             }
         if self.cascade is not None:
             d["cascade"] = self.cascade.to_dict() if hasattr(self.cascade, "to_dict") else self.cascade
+        if self.drift is not None:
+            d["drift"] = self.drift.to_dict() if hasattr(self.drift, "to_dict") else self.drift
         if self.should_escalate:
             d["should_escalate"] = True
         return d

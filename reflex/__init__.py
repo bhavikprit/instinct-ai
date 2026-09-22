@@ -173,6 +173,12 @@ from reflex.cascade import (
     CascadeFrontierPoint,
     CascadeRouter,
 )
+from reflex.drift import (
+    DriftConfig,
+    DriftResult,
+    DriftGuard,
+    DRIFT_MAGIC,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -313,6 +319,10 @@ __all__ = [
     "CascadeDecision",
     "CascadeFrontierPoint",
     "CascadeRouter",
+    "DriftConfig",
+    "DriftResult",
+    "DriftGuard",
+    "DRIFT_MAGIC",
 ]
 
 
