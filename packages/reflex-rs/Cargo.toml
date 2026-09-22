@@ -8,7 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/bhavikprit/reflex-ai"
 homepage = "https://github.com/bhavikprit/reflex-ai"
 readme = "README.md"
-keywords = ["instinct", "instinct-ai", "system-1", "sys1", "reflex"]
+keywords = ["instinct", "instinct-ai", "system-1", "reflex"]
 categories = ["science", "algorithms", "wasm"]
 
 [lib]

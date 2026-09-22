@@ -10,10 +10,9 @@ class TestInstinctNamespace(unittest.TestCase):
         import instinct
         self.assertEqual(instinct.__version__, "0.2.0")
 
-        from instinct import Instinct, Reflex, Sys1, Noul, Choice, Score, DecisionResult
+        from instinct import Instinct, Reflex, Noul, Choice, Score, DecisionResult
         self.assertTrue(callable(Instinct))
         self.assertTrue(callable(Reflex))
-        self.assertTrue(callable(Sys1))
         self.assertTrue(callable(Noul))
         self.assertTrue(callable(Choice))
         self.assertTrue(callable(Score))
@@ -55,23 +54,26 @@ class TestInstinctNamespace(unittest.TestCase):
         self.assertTrue(callable(DriftGuard))
         self.assertTrue(callable(KVCacheEngine))
 
-    def test_backward_compatibility_reflex_and_sys1(self):
+    def test_backward_compatibility_reflex(self):
         import reflex
-        import sys1
         self.assertEqual(reflex.__version__, "0.2.0")
-        self.assertEqual(sys1.__version__, "0.2.0")
 
         rx = reflex.Reflex(backend="local")
-        s1 = sys1.Reflex(backend="local")
         res_rx = rx.evaluate("test", {"q": reflex.Noul("Is this a test?")})
-        res_s1 = s1.evaluate("test", {"q": sys1.Noul("Is this a test?")})
         self.assertIn("q", res_rx)
-        self.assertIn("q", res_s1)
 
     def test_instinct_cli_entrypoint(self):
         import instinct.cli
         self.assertTrue(hasattr(instinct.cli, "main"))
         self.assertTrue(callable(instinct.cli.main))
+
+    def test_instinct_integrations(self):
+        from instinct.integrations.langchain import InstinctRouterNode, InstinctGuardrailNode
+        from instinct.integrations.llamaindex import InstinctQueryRouter, InstinctNodePostprocessor
+        self.assertTrue(callable(InstinctRouterNode))
+        self.assertTrue(callable(InstinctGuardrailNode))
+        self.assertTrue(callable(InstinctQueryRouter))
+        self.assertTrue(callable(InstinctNodePostprocessor))
 
 
 if __name__ == "__main__":

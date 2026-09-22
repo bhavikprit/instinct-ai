@@ -1,4 +1,4 @@
-# 🦀 Reflex Rust SDK (`reflex-rs`)
+# 🦀 Instinct Rust SDK (`instinct-ai` / `reflex-rs`)
 
 ### High-Performance System-1 AI Decision Runtime & Dual-Brain Gateway
 *Make decisions, not strings. Pure Rust, zero external dependencies.*
@@ -17,31 +17,37 @@
   - Dense vector encoding (384-d): **11.7 µs**
   - Instant guardrails: **0.2 µs**
   - Peak throughput: **79,000+ ops/sec**
-- **100% Mathematical Parity**: Bit-for-bit identical vector embeddings and decision calibrations with Python `reflex-core` and JavaScript `@reflex-ai/sdk`.
+- **100% Mathematical Parity**: Bit-for-bit identical vector embeddings and decision calibrations with Python `instinct-ai` and JavaScript `instinct-ai`.
 - **WASM & Edge Compatible**: Compiles cleanly to `wasm32-unknown-unknown` and `wasm32-wasi`.
 
 ---
 
 ## 🚀 Quickstart
 
-Add `reflex-rs` to your `Cargo.toml`:
+Add `instinct-ai` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-reflex-rs = "0.2.0"
+instinct-ai = "0.2.0"
+```
+
+or via CLI:
+
+```bash
+cargo add instinct-ai
 ```
 
 ### Usage
 
 ```rust
-use reflex_rs::Reflex;
+use reflex_rs::{Instinct, Reflex};
 
 fn main() {
-    let rx = Reflex::new();
+    let ins = Instinct::new();
     let state = "Customer: I was billed twice on my invoice today. Refund immediately!";
 
     // 1. Noul Boolean Decision (<15µs)
-    let noul = rx.noul("Is the customer demanding a refund?", state);
+    let noul = ins.noul("Is the customer demanding a refund?", state);
     if noul.is_true {
         println!("Refund requested! (Confidence: {:.2})", noul.confidence);
     }

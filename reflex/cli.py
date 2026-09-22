@@ -62,7 +62,7 @@ def run_doctor():
         providers = onnxruntime.get_available_providers()
         print(f"  • ONNX Runtime       : ✅ Installed ({', '.join(providers)})")
     except ImportError:
-        print(f"  • ONNX Runtime       : ⚪ Optional (not installed, run 'pip install sys1[local]')")
+        print(f"  • ONNX Runtime       : ⚪ Optional (not installed, run 'pip install instinct-ai[local]')")
 
     # 3. Microsecond Latency Diagnostic
     print("\n⏱️  Live Microsecond Latency Benchmark (500 iterations):")

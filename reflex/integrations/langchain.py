@@ -113,3 +113,8 @@ class ReflexGuardrailNode:
         if isinstance(state, dict):
             return {**state, "_guardrail": output}
         return output
+
+
+# Aliases for instinct namespace
+InstinctRouterNode = ReflexRouterNode
+InstinctGuardrailNode = ReflexGuardrailNode

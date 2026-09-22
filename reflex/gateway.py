@@ -1219,3 +1219,7 @@ class ReflexGatewayServer:
             self.thread.join(timeout=2.0)
             self.thread = None
 
+
+# Alias for instinct namespace
+InstinctGatewayServer = ReflexGatewayServer
+

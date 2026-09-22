@@ -143,3 +143,8 @@ class ReflexNodePostprocessor:
         if hasattr(node, "node") and hasattr(node.node, "text"):
             return str(node.node.text)
         return str(node)
+
+
+# Aliases for instinct namespace
+InstinctQueryRouter = ReflexQueryRouter
+InstinctNodePostprocessor = ReflexNodePostprocessor

@@ -5,7 +5,6 @@ Instinct AI: Universal System-1 AI Instinct Runtime & Dual-Brain Gateway.
 from reflex.primitives import Noul, Choice, Score, DecisionResult
 from reflex.client import Reflex
 Instinct = Reflex
-Sys1 = Reflex
 from reflex.async_client import AsyncReflex
 AsyncInstinct = AsyncReflex
 from reflex.embeddings import SemanticVectorEncoder, PureSemanticEngine
@@ -30,6 +29,7 @@ from reflex.learning import SelfTuningInstinctHead, OnlineTuner
 from reflex.backends.c_engine import NativeCEngine
 from reflex.proxy import start_proxy
 from reflex.gateway import ReflexGatewayServer, GatewayConfig, GatewayMetrics
+InstinctGatewayServer = ReflexGatewayServer
 from reflex.mesh import InstinctMeshNode, MeshConfig, MeshPeerState
 from reflex.vision import (
     VisualNoul,
@@ -196,7 +196,6 @@ __version__ = "0.2.0"
 __all__ = [
     "Instinct",
     "Reflex",
-    "Sys1",
     "AsyncInstinct",
     "AsyncReflex",
     "Noul",
@@ -225,6 +224,7 @@ __all__ = [
     "StreamBlockedError",
     "StreamingDecisionGate",
     "start_proxy",
+    "InstinctGatewayServer",
     "ReflexGatewayServer",
     "GatewayConfig",
     "GatewayMetrics",

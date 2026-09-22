@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Instinct AI Team" }]
-keywords = ["instinct", "instinct-ai", "system-1", "sys1", "o1", "decision-model", "ai", "llm", "agents", "reflex", "dual-brain"]
+keywords = ["instinct", "instinct-ai", "system-1", "decision-model", "ai", "llm", "agents", "reflex", "dual-brain"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -34,15 +34,12 @@ all = ["fastapi>=0.100.0", "uvicorn>=0.20.0", "httpx>=0.24.0", "onnxruntime>=1.1
 
 [project.scripts]
 instinct = "instinct.cli:main"
-reflex = "instinct.cli:main"
-sys1 = "instinct.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["instinct*", "reflex*", "sys1*"]
+include = ["instinct*", "reflex*"]
 exclude = ["packages*", "reflex_c*", "tests*", "benchmarks*", "examples*"]
 
 [tool.setuptools.package-data]
 "instinct.web" = ["*.html"]
 "reflex.web" = ["*.html"]
-"sys1.web" = ["*.html"]
