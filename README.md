@@ -6,6 +6,7 @@
 
 ---
 
+[![CI](https://github.com/bhavikprit/reflex-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/bhavikprit/reflex-ai/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/badge/pypi-instinct--ai-blue.svg)](https://pypi.org/project/instinct-ai/)
 [![npm](https://img.shields.io/badge/npm-instinct--ai-red.svg)](https://www.npmjs.com/package/instinct-ai)

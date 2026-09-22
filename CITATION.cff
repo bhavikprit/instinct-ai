@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use Instinct AI (Reflex) in your research or production systems, please cite it as below."
+title: "Instinct AI: Universal Machine-Native System-1 AI Runtime & Dual-Brain Gateway"
+authors:
+  - family-names: "Patel"
+    given-names: "Bhavik"
+    affiliation: "Instinct AI Research"
+version: 0.2.0
+date-released: 2026-09-23
+url: "https://github.com/bhavikprit/reflex-ai"
+repository-code: "https://github.com/bhavikprit/reflex-ai"
+keywords:
+  - "dual-brain architecture"
+  - "system-1 inference"
+  - "conformal prediction"
+  - "decision models"
+  - "ai agents"
+  - "guardrails"
+license: "Apache-2.0"
