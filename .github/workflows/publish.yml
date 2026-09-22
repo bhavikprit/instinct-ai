@@ -1,4 +1,4 @@
-name: Publish Packages (PyPI & npm)
+name: Publish Packages (PyPI, npm, crates.io)
 
 on:
   release:
@@ -61,3 +61,20 @@ jobs:
       working-directory: packages/reflex-sdk
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-crates:
+    name: Publish instinct-ai to crates.io
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Run Cargo Tests
+      run: cargo test --manifest-path packages/reflex-rs/Cargo.toml
+
+    - name: Publish to Crates.io
+      run: cargo publish --manifest-path packages/reflex-rs/Cargo.toml --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
