@@ -1370,6 +1370,17 @@ reflex index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
    - [x] Seamless `Reflex(drift_guard=...)` runtime integration at Step 12 of `evaluate()` and `rx.record_drift_sample`
    - [x] CLI inspection and multi-regime streaming benchmark (`reflex drift info`, `reflex drift benchmark`)
    - [x] 31-test suite verification (`tests/test_drift.py`) and live 3-regime production simulation (`examples/41_realtime_concept_drift_ood_guard.py`)
+ - [x] **Phase 42: Semantic KV-Cache Alignment & Prompt Prefix Deduplication (`reflex.kv`)**
+   - [x] Sub-millisecond Radix / Prefix Tree token cache engine indexing uniform token chunk sequences
+   - [x] Dynamic variable transposition segregating timestamps, ISO dates, UUIDs, and session IDs into trailing runtime context blocks
+   - [x] Deterministic tool schema canonicalization & alphabetical sorting ensuring 100% byte/token prefix invariance
+   - [x] Provider breakpoint placement injecting Anthropic ephemeral `cache_control` breakpoints at system and tool boundaries
+   - [x] Accurate financial token cost savings and TTFT latency reduction estimation across OpenAI, Anthropic, DeepSeek, and vLLM
+   - [x] Gateway integration for `/v1/chat/completions` with `X-Reflex-KV-*` telemetry headers and `/v1/kv/align`, `/v1/kv/stats` endpoints
+   - [x] Zero-dependency binary persistence format (`.reflex-kv`, magic `RFKV`, 60-byte structured header, 32-bit CRC32 trailer)
+   - [x] Seamless `Reflex(kv_engine=...)` runtime integration and `rx.align_prompt()` client API
+   - [x] CLI inspection and multi-turn prefix cache simulation (`reflex kv info`, `reflex kv benchmark`)
+   - [x] 30-test suite verification (`tests/test_kv.py`) and live 8-turn production simulation (`examples/42_semantic_kv_cache_alignment.py`)
 
 
 ---

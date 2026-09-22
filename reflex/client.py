@@ -79,6 +79,7 @@ class Reflex:
         selective_reject: Optional[Any] = None,
         cascade: Optional[Any] = None,
         drift_guard: Optional[Any] = None,
+        kv_engine: Optional[Any] = None,
         **backend_kwargs,
     ):
 
@@ -109,6 +110,12 @@ class Reflex:
             self.drift_guard = DriftGuard()
         else:
             self.drift_guard = drift_guard
+
+        if kv_engine is True:
+            from reflex.kv import KVCacheEngine
+            self.kv_engine = KVCacheEngine()
+        else:
+            self.kv_engine = kv_engine
 
         # Mixture-of-Reflexes Ensemble setup (Phase 26)
         if isinstance(ensemble, InstinctEnsemble):
@@ -924,4 +931,20 @@ class Reflex:
             consensus_threshold=consensus_threshold,
             max_consensus_entropy=max_consensus_entropy,
         )
+
+    def align_prompt(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: Optional[List[Dict[str, Any]]] = None,
+        provider: str = "openai",
+    ) -> Tuple[List[Dict[str, Any]], Optional[List[Dict[str, Any]]], Dict[str, Any]]:
+        """
+        Aligns chat messages and tool schemas to maximize provider prefix caching hit rates (Phase 42).
+        Segregates dynamic context into a trailing block while preserving static system invariants.
+        """
+        if self.kv_engine is not None:
+            return self.kv_engine.aligner.align_messages(messages, tools=tools, provider=provider)
+        from reflex.kv import PromptAligner
+        return PromptAligner.align_messages(messages, tools=tools, provider=provider)
+
 

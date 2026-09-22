@@ -179,6 +179,15 @@ from reflex.drift import (
     DriftGuard,
     DRIFT_MAGIC,
 )
+from reflex.kv import (
+    KVConfig,
+    PrefixTreeNode,
+    PrefixTree,
+    PromptAligner,
+    KVCachePredictor,
+    KVCacheEngine,
+    KV_MAGIC,
+)
 
 __version__ = "0.2.0"
 __all__ = [
@@ -323,6 +332,13 @@ __all__ = [
     "DriftResult",
     "DriftGuard",
     "DRIFT_MAGIC",
+    "KVConfig",
+    "PrefixTreeNode",
+    "PrefixTree",
+    "PromptAligner",
+    "KVCachePredictor",
+    "KVCacheEngine",
+    "KV_MAGIC",
 ]
 
 

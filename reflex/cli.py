@@ -470,6 +470,18 @@ def main():
     drift_bench.add_argument("--samples", type=int, default=300, help="Number of evaluation queries (default: 300)")
     drift_bench.add_argument("--window", type=int, default=50, help="Sliding window size (default: 50)")
 
+    # Command: kv (Semantic KV-Cache Alignment & Deduplication - Phase 42)
+    kv_parser = subparsers.add_parser("kv", help="Inspect and benchmark semantic KV-cache alignment and prefix trees")
+    kv_sub = kv_parser.add_subparsers(dest="kv_action", required=True)
+
+    kv_info = kv_sub.add_parser("info", help="Inspect .reflex-kv model metadata, prefix trie stats, and parameters")
+    kv_info.add_argument("path", help="Path to .reflex-kv file")
+
+    kv_bench = kv_sub.add_parser("benchmark", help="Benchmark KV-cache prefix deduplication hit rates and latency savings")
+    kv_bench.add_argument("--turns", type=int, default=20, help="Number of simulated conversation turns (default: 20)")
+    kv_bench.add_argument("--provider", type=str, default="openai", choices=["openai", "anthropic", "deepseek", "vllm"], help="Target provider (default: openai)")
+    kv_bench.add_argument("--min-tokens", type=int, default=128, help="Minimum cache prefix tokens threshold (default: 128)")
+
     args = parser.parse_args()
 
     if args.command == "doctor":
@@ -1988,6 +2000,110 @@ def main():
             print("\n Terminal ASCII Drift & Quantile Histogram Preview (Concept Drift Regime):")
             print(last_guard_report)
             print("=" * 65 + "\n")
+    elif args.command == "kv":
+        from reflex.kv import KVConfig, KVCacheEngine, PromptAligner, _simple_tokenize
+        import random
+        if args.kv_action == "info":
+            try:
+                engine = KVCacheEngine.load(args.path)
+                print(engine.ascii_prefix_tree())
+            except Exception as e:
+                print(f"❌ Error inspecting .reflex-kv file: {e}")
+        elif args.kv_action == "benchmark":
+            print("=" * 70)
+            print("⚡ Reflex Semantic KV-Cache Alignment & Deduplication Benchmark")
+            print("=" * 70)
+            print(f" • Target Provider        : {args.provider.upper()}")
+            print(f" • Min Cache Prefix Tokens: {args.min_tokens}")
+            print(f" • Total Simulation Turns : {args.turns}")
+
+            config = KVConfig(provider=args.provider, min_cache_tokens=args.min_tokens)
+            engine = KVCacheEngine(config=config)
+
+            # Static system prompt instructions (canonical invariants)
+            base_instructions = (
+                "You are an enterprise AI assistant embedded in a dual-brain runtime.\n"
+                "Your objective is to provide deterministic, ultra-low latency, and secure decisions.\n"
+                "Always adhere to strict compliance policies, sanitize PII, and verify schema boundaries.\n"
+                "Available tools must be invoked using standard JSON arguments adhering strictly to the schema."
+            )
+
+            # Define arbitrary unordered tools
+            tools_sample = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "lookup_user",
+                        "description": "Fetch user record by ID",
+                        "parameters": {"type": "object", "properties": {"user_id": {"type": "string"}}, "required": ["user_id"]},
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "calc_credit_score",
+                        "description": "Calculate user risk score",
+                        "parameters": {"type": "object", "properties": {"income": {"type": "number"}, "age": {"type": "integer"}}, "required": ["age", "income"]},
+                    },
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "authorize_payment",
+                        "description": "Authorize customer transaction",
+                        "parameters": {"type": "object", "properties": {"currency": {"type": "string"}, "amount": {"type": "number"}}, "required": ["amount", "currency"]},
+                    },
+                },
+            ]
+
+            user_intents = [
+                "Check account balance for user usr_9482",
+                "Review loan eligibility based on $85,000 salary",
+                "Authorize $450 wire transfer to escrow",
+                "Query current fraud risk rating for customer",
+                "Reset multi-factor authentication credentials",
+            ]
+
+            print("\n Turn-by-Turn Prefix Deduplication & Cache Simulation:")
+            print(f" {'Turn':<5} {'Tokens':<8} {'Aligned Prefix':<16} {'Hit Status':<12} {'Turn Saved ($)':<16} {'Cumul Saved ($)'}")
+            print(" " + "-" * 75)
+
+            cumul_dollars = 0.0
+            rng = random.Random(42)
+
+            for turn in range(1, args.turns + 1):
+                timestamp = f"2026-09-22T22:{turn:02d}:00Z"
+                req_id = f"req-{turn * 1000 + rng.randint(10, 99)}"
+                system_content = f"Current time: {timestamp}\nRequest ID: {req_id}\n{base_instructions}"
+
+                user_turn = user_intents[(turn - 1) % len(user_intents)]
+                shuffled_tools = list(tools_sample)
+                rng.shuffle(shuffled_tools)
+
+                payload = {
+                    "messages": [
+                        {"role": "system", "content": system_content},
+                        {"role": "user", "content": user_turn},
+                    ],
+                    "tools": shuffled_tools,
+                }
+
+                _, telemetry = engine.process(payload)
+                is_hit = telemetry["is_cache_hit"]
+                hit_str = "🎯 HIT" if is_hit else "⚪ MISS"
+                saved_usd = telemetry["cost_saved_usd"]
+                cumul_dollars += saved_usd
+
+                print(
+                    f" {turn:<5} {telemetry['total_tokens']:<8} "
+                    f"{telemetry['matched_prefix_tokens']:<16} "
+                    f"{hit_str:<12} "
+                    f"${saved_usd:9.6f}       "
+                    f"${cumul_dollars:9.6f}"
+                )
+
+            print("\n" + engine.ascii_prefix_tree())
+            print("=" * 70 + "\n")
     elif args.command == "benchmark":
         from reflex.eval import generate_leaderboard
         print(generate_leaderboard(args.output))

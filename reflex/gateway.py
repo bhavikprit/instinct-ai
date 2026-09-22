@@ -83,6 +83,10 @@ class GatewayConfig:
     distill_auto_stage: bool = True
     distill_buffer: Optional[Any] = None
     distill_worker: Optional[Any] = None
+    kv_alignment_enabled: bool = True
+    kv_provider: str = "openai"
+    kv_min_cache_tokens: Optional[int] = None
+    kv_engine: Optional[Any] = None
 
 
 
@@ -188,6 +192,10 @@ class GatewayMetrics:
     tokens_saved: int = 0
     dollars_saved: float = 0.0
     total_saved_latency_ms: float = 0.0
+    kv_aligned_requests: int = 0
+    kv_cache_hits: int = 0
+    kv_tokens_saved: int = 0
+    kv_dollars_saved: float = 0.0
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def record_l1_hit(self, tokens: int, cost: float, latency_saved: float):
@@ -226,12 +234,21 @@ class GatewayMetrics:
             self.total_requests += 1
             self.upstream_requests += 1
 
+    def record_kv_alignment(self, is_hit: bool, tokens_saved: int, cost_saved: float):
+        with self._lock:
+            self.kv_aligned_requests += 1
+            if is_hit:
+                self.kv_cache_hits += 1
+                self.kv_tokens_saved += tokens_saved
+                self.kv_dollars_saved += cost_saved
+
     def to_dict(self) -> Dict[str, Any]:
         with self._lock:
             total_cache_hits = self.l1_cache_hits + self.l2_semantic_hits
             total_intercepted = total_cache_hits + self.system1_shortcircuits + self.guardrail_blocks
             cache_hit_rate = (total_cache_hits / self.total_requests) if self.total_requests > 0 else 0.0
             interception_rate = (total_intercepted / self.total_requests) if self.total_requests > 0 else 0.0
+            kv_hit_rate = (self.kv_cache_hits / self.kv_aligned_requests) if self.kv_aligned_requests > 0 else 0.0
 
             return {
                 "total_requests": self.total_requests,
@@ -246,6 +263,11 @@ class GatewayMetrics:
                 "tokens_saved": self.tokens_saved,
                 "dollars_saved": round(self.dollars_saved, 4),
                 "total_saved_latency_ms": round(self.total_saved_latency_ms, 2),
+                "kv_aligned_requests": self.kv_aligned_requests,
+                "kv_cache_hits": self.kv_cache_hits,
+                "kv_hit_rate": round(kv_hit_rate, 4),
+                "kv_tokens_saved": self.kv_tokens_saved,
+                "kv_dollars_saved": round(self.kv_dollars_saved, 6),
             }
 
 
@@ -274,6 +296,7 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
     ensemble: Optional[Any] = None
     distill_buffer: Optional[Any] = None
     distill_worker: Optional[Any] = None
+    kv_engine: Optional[Any] = None
 
     @classmethod
     def initialize(cls, config: GatewayConfig):
@@ -401,12 +424,34 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         else:
             cls.distill_worker = None
 
+        # Semantic KV-Cache Alignment & Deduplication (Phase 42)
+        if config.kv_engine is not None:
+            cls.kv_engine = config.kv_engine
+        elif config.kv_alignment_enabled:
+            from reflex.kv import KVCacheEngine, KVConfig
+            kv_kwargs = {"provider": config.kv_provider}
+            if config.kv_min_cache_tokens is not None:
+                kv_kwargs["min_cache_tokens"] = config.kv_min_cache_tokens
+            cls.kv_engine = KVCacheEngine(config=KVConfig(**kv_kwargs))
+        else:
+            cls.kv_engine = None
+
     def do_GET(self):
         norm_path = self.path.split("?")[0]
         if norm_path in ("/healthz", "/health"):
             self._send_json(200, {"status": "healthy", "service": "reflex-gateway", "version": "0.2.0"})
         elif norm_path in ("/v1/gateway/stats", "/stats"):
             self._send_json(200, self.metrics.to_dict())
+        elif norm_path in ("/v1/kv/stats", "/kv/stats"):
+            if self.kv_engine is not None:
+                self._send_json(200, {
+                    "provider": self.kv_engine.config.provider,
+                    "min_cache_tokens": self.kv_engine.config.min_cache_tokens,
+                    "cached_discount_rate": self.kv_engine.config.cached_discount_rate,
+                    "tree_stats": self.kv_engine.tree.stats(),
+                })
+            else:
+                self._send_json(400, {"error": "KV alignment is not enabled on this gateway"})
         elif norm_path in ("/v1/canary/stats", "/canary/stats"):
             if self.shadow_router is not None:
                 self._send_json(200, self.shadow_router.stats())
@@ -614,6 +659,18 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(status, res)
             else:
                 self._send_json(400, {"error": "Instinct Mesh is not enabled on this gateway"})
+        elif norm_path in ("/v1/kv/align", "/kv/align"):
+            if self.kv_engine is not None:
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+                data = json.loads(body) if body else {}
+                aligned_req, meta = self.kv_engine.process(data)
+                self._send_json(200, {
+                    "aligned_request": aligned_req,
+                    "kv_telemetry": meta,
+                })
+            else:
+                self._send_json(400, {"error": "KV alignment is not enabled on this gateway"})
         else:
             self.send_error(404, f"Endpoint '{self.path}' not supported by Reflex Gateway")
 
@@ -632,6 +689,17 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 }
             })
             return
+
+        # Pre-Flight Semantic KV-Cache Alignment & Deduplication (Phase 42)
+        kv_meta = None
+        if self.kv_engine is not None:
+            req_json, kv_meta = self.kv_engine.process(req_json)
+            if kv_meta:
+                self.metrics.record_kv_alignment(
+                    is_hit=kv_meta.get("is_cache_hit", False),
+                    tokens_saved=kv_meta.get("matched_prefix_tokens", 0) if kv_meta.get("is_cache_hit") else 0,
+                    cost_saved=kv_meta.get("cost_saved_usd", 0.0),
+                )
 
         messages = req_json.get("messages", [])
         prompt_parts = []
@@ -812,7 +880,7 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
         # 4. Upstream Forwarding & Passthrough
         # -------------------------------------------------------------
         self.metrics.record_upstream()
-        self._forward_upstream(req_json, combined_prompt, model, t0)
+        self._forward_upstream(req_json, combined_prompt, model, t0, kv_meta=kv_meta)
 
     def _is_decision_candidate(self, prompt: str, response_format: dict) -> bool:
         """Heuristically identify if a prompt is an if/else, routing, or classification task."""
@@ -938,7 +1006,14 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
             },
         }
 
-    def _forward_upstream(self, req_json: dict, prompt: str, model: str, t0: float):
+    def _forward_upstream(
+        self,
+        req_json: dict,
+        prompt: str,
+        model: str,
+        t0: float,
+        kv_meta: Optional[Dict[str, Any]] = None,
+    ):
         """Forward generative request upstream with header injection and caching."""
         target_url = f"{self.config.upstream_url.rstrip('/')}/chat/completions"
         api_key = self.config.upstream_key or self.headers.get("Authorization", "")
@@ -982,10 +1057,17 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                     except Exception:
                         pass
 
-                self._send_json(resp.status, resp_json, extra_headers={
+                extra_hdrs = {
                     "X-Reflex-Cache": "MISS",
                     "X-Reflex-Latency-Ms": f"{latency_ms:.2f}",
-                })
+                }
+                if kv_meta:
+                    extra_hdrs["X-Reflex-KV-Aligned"] = "TRUE"
+                    extra_hdrs["X-Reflex-KV-Hit"] = "TRUE" if kv_meta.get("is_cache_hit") else "FALSE"
+                    extra_hdrs["X-Reflex-KV-Matched-Tokens"] = str(kv_meta.get("matched_prefix_tokens", 0))
+                    extra_hdrs["X-Reflex-KV-Savings-USD"] = f"{kv_meta.get('cost_saved_usd', 0.0):.6f}"
+
+                self._send_json(resp.status, resp_json, extra_headers=extra_hdrs)
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8")
             try:
@@ -1010,7 +1092,13 @@ class GatewayRequestHandler(BaseHTTPRequestHandler):
                 }],
                 "usage": {"prompt_tokens": len(prompt.split()), "completion_tokens": 10, "total_tokens": len(prompt.split()) + 10}
             }
-            self._send_json(200, fallback_json, extra_headers={"X-Reflex-Fallback": "TRUE"})
+            fallback_headers = {"X-Reflex-Fallback": "TRUE"}
+            if kv_meta:
+                fallback_headers["X-Reflex-KV-Aligned"] = "TRUE"
+                fallback_headers["X-Reflex-KV-Hit"] = "TRUE" if kv_meta.get("is_cache_hit") else "FALSE"
+                fallback_headers["X-Reflex-KV-Matched-Tokens"] = str(kv_meta.get("matched_prefix_tokens", 0))
+                fallback_headers["X-Reflex-KV-Savings-USD"] = f"{kv_meta.get('cost_saved_usd', 0.0):.6f}"
+            self._send_json(200, fallback_json, extra_headers=fallback_headers)
 
     def _send_json(self, status_code: int, data: dict, extra_headers: Optional[Dict[str, str]] = None):
         body = json.dumps(data, indent=2).encode("utf-8")
@@ -1073,6 +1161,10 @@ class ReflexGatewayServer:
     def audit_log(self) -> Optional[MerkleAuditLog]:
         return self.handler_class.audit_log
 
+    @property
+    def kv_engine(self) -> Optional[Any]:
+        return self.handler_class.kv_engine
+
     def start(self, background: bool = False):
         """Start the gateway server."""
         self.handler_class.initialize(self.config)
@@ -1101,6 +1193,8 @@ class ReflexGatewayServer:
                 print(f"   • Merkle Audit Log : Active (Height: {self.handler_class.audit_log.height()}, Root: {self.handler_class.audit_log.root[:12]}...)")
             if self.handler_class.distill_buffer is not None:
                 print(f"   • Distill Engine   : Active (Buffer: {self.handler_class.distill_buffer.size()}/{self.handler_class.distill_buffer.max_size})")
+            if self.handler_class.kv_engine is not None:
+                print(f"   • KV-Cache Aligner : Active ({self.config.kv_provider.upper()} prefix trie)")
             try:
                 self.server.serve_forever()
             except KeyboardInterrupt:
