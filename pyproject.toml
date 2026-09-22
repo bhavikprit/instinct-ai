@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "reflex-ai"
+name = "sys1"
 version = "0.2.0"
 description = "Universal System-1 AI Runtime & Dual-Brain Decision Gateway"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
-authors = [{ name = "Reflex AI Team" }]
-keywords = ["ai", "llm", "system-one", "decision-model", "jev", "agents", "reflex"]
+authors = [{ name = "sys1 Team" }]
+keywords = ["sys1", "system-one", "o1", "decision-model", "ai", "llm", "agents", "reflex", "dual-brain"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -27,12 +27,14 @@ local = ["onnxruntime>=1.15.0", "numpy>=1.20.0"]
 all = ["fastapi>=0.100.0", "uvicorn>=0.20.0", "httpx>=0.24.0", "onnxruntime>=1.15.0", "numpy>=1.20.0"]
 
 [project.scripts]
-reflex = "reflex.cli:main"
+sys1 = "sys1.cli:main"
+reflex = "sys1.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["reflex*"]
+include = ["sys1*", "reflex*"]
 exclude = ["packages*", "reflex_c*", "tests*", "benchmarks*", "examples*"]
 
 [tool.setuptools.package-data]
+"sys1.web" = ["*.html"]
 "reflex.web" = ["*.html"]

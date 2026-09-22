@@ -10,15 +10,15 @@ import platform
 import shutil
 import sys
 import time
-from reflex.client import Reflex
-from reflex.primitives import Noul, Choice
+from sys1.client import Reflex
+from sys1.primitives import Noul, Choice
 
 
 def run_doctor():
-    from reflex import __version__
-    from reflex.embeddings import SemanticVectorEncoder
-    from reflex.backends.c_engine import find_libreflex, NativeCEngine
-    from reflex.guardrails import GuardrailSuite
+    from sys1 import __version__
+    from sys1.embeddings import SemanticVectorEncoder
+    from sys1.backends.c_engine import find_libreflex, NativeCEngine
+    from sys1.guardrails import GuardrailSuite
 
     print("=" * 70)
     print(f"⚡ Reflex System Diagnostic & Environment Doctor (v{__version__})")
@@ -107,13 +107,13 @@ def run_doctor():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Reflex: Universal System-1 AI Runtime & Dual-Brain Gateway"
+        description="sys1: Universal System-1 AI Runtime & Dual-Brain Gateway (OpenAI built o1 for System 2. We built sys1 for System 1.)"
     )
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Command: serve / gateway (Production AI Envoy reverse proxy)
     for cmd_name in ("serve", "gateway"):
-        p = subparsers.add_parser(cmd_name, help="Start Reflex AI Envoy production reverse proxy gateway")
+        p = subparsers.add_parser(cmd_name, help="Start sys1 AI Envoy production reverse proxy gateway")
         p.add_argument("--host", default="0.0.0.0" if cmd_name == "gateway" else "127.0.0.1", help="Host address")
         p.add_argument("--port", type=int, default=8080, help="Port (default: 8080)")
         p.add_argument("--upstream", default=os.environ.get("UPSTREAM_OPENAI_URL", "https://api.openai.com/v1"), help="Upstream API base URL")
@@ -487,8 +487,8 @@ def main():
     if args.command == "doctor":
         run_doctor()
     elif args.command == "tune":
-        from reflex.feedback import FeedbackCollector
-        from reflex.learning import SelfTuningInstinctHead, OnlineTuner
+        from sys1.feedback import FeedbackCollector
+        from sys1.learning import SelfTuningInstinctHead, OnlineTuner
         collector = FeedbackCollector()
         collector.load_jsonl(args.dataset)
         samples = collector.get_samples()
@@ -502,10 +502,10 @@ def main():
         print(f" • Final Loss   : {stats['final_loss']:.4f}")
         print(f" • Saved Model  : {args.output}\n")
     elif args.command == "repl":
-        from reflex.repl import start_repl
+        from sys1.repl import start_repl
         start_repl(initial_backend=args.backend)
     elif args.command in ("serve", "gateway"):
-        from reflex.gateway import ReflexGatewayServer, GatewayConfig
+        from sys1.gateway import ReflexGatewayServer, GatewayConfig
         peers_list = [p.strip() for p in getattr(args, "mesh_peers", "").split(",") if p.strip()]
         secret = getattr(args, "mesh_secret", "") or None
         cfg = GatewayConfig(
@@ -639,7 +639,7 @@ def main():
             print(f"\n❌ Error querying mesh gateway: {e}\n")
     elif args.command == "policy":
         if getattr(args, "policy_action", None) == "test":
-            from reflex.policy import PolicyEngine, PolicyRuleSet
+            from sys1.policy import PolicyEngine, PolicyRuleSet
             ruleset = PolicyRuleSet.from_json_file(args.rules)
             engine = PolicyEngine(ruleset)
             try:
@@ -660,7 +660,7 @@ def main():
             print()
 
     elif args.command == "audit":
-        from reflex.policy import MerkleAuditLog
+        from sys1.policy import MerkleAuditLog
         if getattr(args, "log", None):
             log = MerkleAuditLog(storage_path=args.log)
             if args.audit_action == "root":
@@ -703,7 +703,7 @@ def main():
             except Exception as e:
                 print(f"\n❌ Error querying audit gateway: {e}\n")
     elif args.command == "compile":
-        from reflex.compiler import PromptSpec, InstinctCompiler
+        from sys1.compiler import PromptSpec, InstinctCompiler
 
         if getattr(args, "spec", None) and os.path.exists(args.spec):
             with open(args.spec, "r") as f:
@@ -755,7 +755,7 @@ def main():
         print(f" • Artifact Size : {file_size_kb:.1f} KB ({args.output})")
         print(f" • Latency       : <0.05ms ($0 cost, 0ms network)\n")
     elif args.command == "ensemble":
-        from reflex.ensemble import InstinctEnsemble
+        from sys1.ensemble import InstinctEnsemble
         if not os.path.exists(args.ensemble):
             print(f"❌ Error: Ensemble file '{args.ensemble}' not found.")
             sys.exit(1)
@@ -795,7 +795,7 @@ def main():
                 print(f"  • {s_name:<18} -> {pred['selected']:<12} (Conf: {pred['confidence']*100:.1f}%, Gate: {g_w:.1f}%, Vote: {v_w:.1f}%)")
             print("=" * 65)
     elif args.command == "ipc":
-        from reflex.shm import ReflexIPCDaemon, ReflexIPCClient, SHMConfig, IPCOpCode
+        from sys1.shm import ReflexIPCDaemon, ReflexIPCClient, SHMConfig, IPCOpCode
         cfg = SHMConfig(
             socket_path=getattr(args, "socket", "/tmp/reflex_ipc.sock"),
             shm_name=getattr(args, "shm_name", "reflex_shm_ring"),
@@ -854,7 +854,7 @@ def main():
             finally:
                 client.close()
     elif args.command == "simd":
-        from reflex.simd import get_simd_engine
+        from sys1.simd import get_simd_engine
         simd = get_simd_engine()
         caps = simd.features
         if args.simd_action == "info":
@@ -924,7 +924,7 @@ def main():
             print(f"🚀 FP32 SIMD Speedup    : {ns_scalar / max(1.0, ns_simd):.1f}x vs pure Python")
             print(f"⚡ 1-Bit Hamming Speedup: {ns_scalar / max(1.0, ns_bin):.1f}x vs pure Python (32x memory compression)\n")
     elif args.command == "distill":
-        from reflex.distill import DistillationBuffer, AutonomousDistiller
+        from sys1.distill import DistillationBuffer, AutonomousDistiller
         import urllib.request
         import urllib.error
 
@@ -1002,7 +1002,7 @@ def main():
             except Exception as e:
                 print(f"\n❌ Error triggering distillation cycle: {e}\n")
     elif args.command == "index":
-        from reflex.index import HNSWIndex, HNSWConfig
+        from sys1.index import HNSWIndex, HNSWConfig
         if args.index_action == "info":
             if not os.path.exists(args.index_path):
                 print(f"❌ Error: Index file '{args.index_path}' not found.")
@@ -1089,7 +1089,7 @@ def main():
             print(f"   • Recall@{args.k}       : {avg_recall * 100:.1f}%\n")
             print("=" * 65 + "\n")
     elif args.command == "pq":
-        from reflex.pq import PQConfig, ProductQuantizer, PQIndex
+        from sys1.pq import PQConfig, ProductQuantizer, PQIndex
         if args.pq_action == "info":
             if not os.path.exists(args.path):
                 print(f"❌ Error: File '{args.path}' not found.")
@@ -1184,7 +1184,7 @@ def main():
             print(f"   • Throughput    : {adc_qps:.0f} QPS\n")
 
             print(f"4. Running Exact FP32 Brute-Force Search ({args.queries} queries)...")
-            from reflex.index import HNSWIndex, HNSWConfig
+            from sys1.index import HNSWIndex, HNSWConfig
             exact_index = HNSWIndex(HNSWConfig(dim=args.dim))
             for i, vec in enumerate(dataset):
                 exact_index.insert(vec, payload={"id": i})
@@ -1212,7 +1212,7 @@ def main():
             print(f"   • Recall@{args.k}       : {avg_recall * 100:.1f}%\n")
             print("=" * 65 + "\n")
     elif args.command == "ivfpq":
-        from reflex.ivfpq import IVFPQConfig, IVFPQIndex
+        from sys1.ivfpq import IVFPQConfig, IVFPQIndex
         if args.ivfpq_action == "info":
             if not os.path.exists(args.path):
                 print(f"❌ File not found: {args.path}")
@@ -1296,7 +1296,7 @@ def main():
             print(f"   • Throughput    : {ivf_qps:.0f} QPS\n")
             print("=" * 65 + "\n")
     elif args.command == "conformal":
-        from reflex.conformal import ConformalConfig, ConformalPredictor
+        from sys1.conformal import ConformalConfig, ConformalPredictor
         if args.conformal_action == "info":
             if not os.path.exists(args.path):
                 print(f"❌ File not found: {args.path}")
@@ -1363,7 +1363,7 @@ def main():
             print(f" • Anomaly / Empty   : {metrics['empty_ratio'] * 100:.1f}%\n")
             print("=" * 65 + "\n")
     elif args.command == "crc":
-        from reflex.crc import CRCConfig, ConformalRiskController
+        from sys1.crc import CRCConfig, ConformalRiskController
         if args.crc_action == "info":
             if not os.path.exists(args.path):
                 print(f"❌ File not found: {args.path}")
@@ -1424,7 +1424,7 @@ def main():
             print(f" • Sample Count        : {metrics['sample_count']}\n")
             print("=" * 65 + "\n")
     elif args.command == "aci":
-        from reflex.aci import ACIConfig, AdaptiveConformalTracker
+        from sys1.aci import ACIConfig, AdaptiveConformalTracker
         if args.aci_action == "info":
             try:
                 tracker = AdaptiveConformalTracker.load(args.path)
@@ -1497,7 +1497,7 @@ def main():
             print(f"   - Drift Alarm Triggered : {'✅ Yes (Self-Healed)' if tracker.total_steps > 0 else 'No'}\n")
             print("=" * 65 + "\n")
     elif args.command == "cqr":
-        from reflex.cqr import CQRConfig, ConformalizedQuantileRegressor
+        from sys1.cqr import CQRConfig, ConformalizedQuantileRegressor
         if args.cqr_action == "info":
             try:
                 cqr = ConformalizedQuantileRegressor.load(args.path)
@@ -1581,7 +1581,7 @@ def main():
             print(f" {'Reflex CQR (Adaptive)':<25} {cqr_cov:>6.1f}%     {cqr_mean_w:>8.3f} units    {'✅ (Covered, Heteroscedastic)'}\n")
             print("=" * 65 + "\n")
     elif args.command == "calib":
-        from reflex.calib import CalibConfig, OnlineProbabilityCalibrator
+        from sys1.calib import CalibConfig, OnlineProbabilityCalibrator
         if args.calib_action == "info":
             try:
                 calib = OnlineProbabilityCalibrator.load(args.path)
@@ -1639,7 +1639,7 @@ def main():
             calib.print_ascii_reliability_diagram()
             print("=" * 65 + "\n")
     elif args.command == "va":
-        from reflex.venn_abers import VennAbersConfig, VennAbersPredictor
+        from sys1.venn_abers import VennAbersConfig, VennAbersPredictor
         if args.va_action == "info":
             try:
                 va = VennAbersPredictor.load(args.path)
@@ -1706,7 +1706,7 @@ def main():
                 print(f" {label:<24} {sc:<14.2f} {inv_str:<22} {res.uncertainty:<12.4f} {status}")
             print("=" * 65 + "\n")
     elif args.command == "reject":
-        from reflex.reject import SelectiveClassifier, SelectiveRejectConfig
+        from sys1.reject import SelectiveClassifier, SelectiveRejectConfig
         if args.reject_action == "info":
             try:
                 sc = SelectiveClassifier.load(args.path)
@@ -1770,7 +1770,7 @@ def main():
                 print(f" {conf_val:<14.2f} {sc.threshold:<12.4f} {verdict:<20} {sc.calibrated_upper_risk * 100:<17.2f}% {action}")
             print("=" * 65 + "\n")
     elif args.command == "cascade":
-        from reflex.cascade import CascadeConfig, CascadeRouter, CascadeTier
+        from sys1.cascade import CascadeConfig, CascadeRouter, CascadeTier
         if args.cascade_action == "info":
             try:
                 router = CascadeRouter.load(args.path)
@@ -1872,7 +1872,7 @@ def main():
                 print(f" {label:<24} {diff_val:<12.2f} {dec.selected_tier:<18} ${dec.cumulative_cost:<11.5f} {dec.cumulative_latency_ms:<9.1f}ms {dec.cost_savings_pct:<8.1f}%")
             print("=" * 65 + "\n")
     elif args.command == "drift":
-        from reflex.drift import DriftConfig, DriftGuard
+        from sys1.drift import DriftConfig, DriftGuard
         if args.drift_action == "info":
             try:
                 guard = DriftGuard.load(args.path)
@@ -2001,7 +2001,7 @@ def main():
             print(last_guard_report)
             print("=" * 65 + "\n")
     elif args.command == "kv":
-        from reflex.kv import KVConfig, KVCacheEngine, PromptAligner, _simple_tokenize
+        from sys1.kv import KVConfig, KVCacheEngine, PromptAligner, _simple_tokenize
         import random
         if args.kv_action == "info":
             try:
@@ -2105,10 +2105,10 @@ def main():
             print("\n" + engine.ascii_prefix_tree())
             print("=" * 70 + "\n")
     elif args.command == "benchmark":
-        from reflex.eval import generate_leaderboard
+        from sys1.eval import generate_leaderboard
         print(generate_leaderboard(args.output))
     elif args.command == "models":
-        from reflex.models import list_models, download_model
+        from sys1.models import list_models, download_model
         if args.models_action == "download":
             path = download_model(args.model_name)
             print(f"✅ Ready: {path}")
@@ -2122,31 +2122,31 @@ def main():
                 print(f"{m['name']:<26} {m['size_mb']:.1f} MB   {cached_str:<8} {m['description']}")
             print("\nDownload any model via: reflex models download <name>\n")
     elif args.command == "serve-api":
-        from reflex.server import start_server
+        from sys1.server import start_server
         try:
             start_server(host=args.host, port=args.port)
         except KeyboardInterrupt:
             print("\nShutting down Reflex API Gateway...")
             sys.exit(0)
     elif args.command == "playground":
-        from reflex.web.playground import start_playground
+        from sys1.web.playground import start_playground
         try:
             start_playground(host=args.host, port=args.port, open_browser=not args.no_browser)
         except KeyboardInterrupt:
             print("\nShutting down Reflex Playground...")
             sys.exit(0)
     elif args.command == "quantize":
-        from reflex.export import quantize_onnx_model
+        from sys1.export import quantize_onnx_model
         out = quantize_onnx_model(args.model_path, args.output)
         print(f"✅ Quantized model ready at: {out}")
     elif args.command == "mcp":
-        from reflex.mcp import start_mcp_server
+        from sys1.mcp import start_mcp_server
         try:
             start_mcp_server()
         except KeyboardInterrupt:
             sys.exit(0)
     elif args.command == "dataset-gen":
-        from reflex.rlcd import generate_decision_dataset, save_dataset_jsonl
+        from sys1.rlcd import generate_decision_dataset, save_dataset_jsonl
         print(f"Generating {args.samples} calibrated decision samples (seed={args.seed})...")
         samples = generate_decision_dataset(num_samples=args.samples, seed=args.seed)
         save_dataset_jsonl(samples, args.output)

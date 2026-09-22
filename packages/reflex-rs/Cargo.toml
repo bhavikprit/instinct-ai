@@ -1,11 +1,11 @@
 [package]
-name = "reflex-rs"
+name = "sys1"
 version = "0.2.0"
 edition = "2021"
-authors = ["Reflex AI Team"]
+authors = ["sys1 Team"]
 description = "Universal Machine-Native System-1 AI Runtime for Rust & WebAssembly"
 license = "Apache-2.0"
-keywords = ["ai", "decision-model", "system-1", "llm", "reflex"]
+keywords = ["sys1", "system-1", "o1", "decision-model", "reflex"]
 categories = ["science", "algorithms", "wasm"]
 
 [lib]

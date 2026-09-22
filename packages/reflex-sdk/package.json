@@ -1,5 +1,5 @@
 {
-  "name": "@reflex-ai/sdk",
+  "name": "sys1",
   "version": "0.2.0",
   "description": "Universal System-1 AI Runtime & Dual-Brain Gateway for Edge, Cloudflare Workers, Node.js, and Browsers",
   "main": "./index.js",
@@ -17,8 +17,10 @@
     "test": "node --test test/test_reflex.mjs"
   },
   "keywords": [
-    "ai",
+    "sys1",
     "system-1",
+    "o1",
+    "ai",
     "edge",
     "cloudflare-workers",
     "fast-routing",
@@ -28,7 +30,7 @@
     "low-latency",
     "reflex"
   ],
-  "author": "Reflex AI Team",
+  "author": "sys1 Team",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

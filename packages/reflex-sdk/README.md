@@ -1,15 +1,16 @@
-# @reflex-ai/sdk
+# sys1
 
 > **Universal System-1 AI Runtime & Dual-Brain Gateway for Edge, Cloudflare Workers, Node.js, and Browsers.**  
-> *Zero external dependencies. Sub-0.05ms execution. 100% mathematical vector parity with Python Reflex.*
+> *OpenAI built o1 for System 2. We built sys1 for System 1.*  
+> *Zero external dependencies. Sub-0.05ms execution. 100% mathematical vector parity with Python sys1.*
 
 ---
 
-## ⚡ Why Reflex at the Edge?
+## ⚡ Why sys1 at the Edge?
 
 Modern AI agents and web services suffer from high latency, massive cloud LLM bills, and lack of real-time security guardrails. 
 
-`@reflex-ai/sdk` brings Reflex's machine-native System-1 decision architecture directly into TypeScript and JavaScript environments:
+`sys1` brings machine-native System-1 decision architecture directly into TypeScript and JavaScript environments:
 - **Cloudflare Workers & Vercel Edge**: Filter prompt injections, PII, and routine queries at the edge in <0.05ms before calling OpenAI/Anthropic.
 - **Node.js & Next.js Backends**: Sub-millisecond tool routing, dynamic schema selection, and semantic memory caching.
 - **Client-Side Browsers**: 100% local, zero-network instinct evaluation with zero API key exposure.
@@ -19,9 +20,9 @@ Modern AI agents and web services suffer from high latency, massive cloud LLM bi
 ## 📦 Installation
 
 ```bash
-npm install @reflex-ai/sdk
-# or pnpm add @reflex-ai/sdk
-# or bun add @reflex-ai/sdk
+npm install sys1
+# or pnpm add sys1
+# or bun add sys1
 ```
 
 *(Has **zero production dependencies** and runs on any standard ECMAScript 2022+ / Web runtime).*
@@ -33,9 +34,9 @@ npm install @reflex-ai/sdk
 ### 1. Instant System-1 Instincts
 
 ```javascript
-import { Reflex, Noul, Choice } from "@reflex-ai/sdk";
+import { Sys1, Noul, Choice } from "sys1";
 
-const rx = new Reflex({ cache: true, guardrails: true });
+const rx = new Sys1({ cache: true, guardrails: true });
 
 // Probabilistic Boolean decision (Noul)
 const isUrgent = await rx.noul(
