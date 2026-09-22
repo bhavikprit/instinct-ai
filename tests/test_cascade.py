@@ -425,7 +425,7 @@ class TestReflexClientIntegration(unittest.TestCase):
         self.assertIsInstance(client.cascade, CascadeRouter)
 
     def test_client_evaluate_populates_cascade(self):
-        router = CascadeRouter(config=CascadeConfig(min_calibration_samples=20))
+        router = CascadeRouter(config=CascadeConfig(min_calibration_samples=20, exploration_rate=0.0))
         for _ in range(25):
             router.add_sample({0: 0.95, 1: 0.98, 2: 0.99}, {0: 0, 1: 0, 2: 0})
         router.calibrate()
