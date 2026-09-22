@@ -13,7 +13,7 @@ We release security updates and bug fixes for the latest active release versions
 
 ## Reporting a Vulnerability
 
-The Instinct AI / Reflex-AI team takes security vulnerabilities seriously. We appreciate your efforts to responsibly disclose findings.
+The Instinct AI team takes security vulnerabilities seriously. We appreciate your efforts to responsibly disclose findings.
 
 ### Private Reporting Channels
 If you discover a security vulnerability (such as bypasses in guardrails, memory buffer safety in the C runtime, or authentication issues in the Envoy Gateway), **please do not create a public GitHub issue**.
@@ -21,7 +21,7 @@ If you discover a security vulnerability (such as bypasses in guardrails, memory
 Instead, please report the vulnerability privately via one of the following methods:
 
 1. **GitHub Private Vulnerability Reporting**:
-   - Go to the [Security Advisories](https://github.com/bhavikprit/reflex-ai/security/advisories) tab of this repository.
+   - Go to the [Security Advisories](https://github.com/bhavikprit/instinct-ai/security/advisories) tab of this repository.
    - Click **"Report a vulnerability"** to open a confidential report.
 
 2. **Direct Security Contact**:

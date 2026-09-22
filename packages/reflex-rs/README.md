@@ -53,7 +53,7 @@ fn main() {
     }
 
     // 2. Choice Rubric Selection (<15µs)
-    let choice = rx.choice(
+    let choice = ins.choice(
         "Route ticket to department",
         vec!["billing".into(), "support".into(), "sales".into()],
         state,
@@ -61,7 +61,7 @@ fn main() {
     println!("Selected queue: {}", choice.selected);
 
     // 3. Instant Guardrails (<1µs)
-    let guard = rx.guardrail(state);
+    let guard = ins.guardrail(state);
     assert!(guard.is_safe);
 }
 ```

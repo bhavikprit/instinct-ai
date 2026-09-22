@@ -34,12 +34,12 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bhavikprit/reflex-ai.git"
+    "url": "git+https://github.com/bhavikprit/instinct-ai.git"
   },
   "bugs": {
-    "url": "https://github.com/bhavikprit/reflex-ai/issues"
+    "url": "https://github.com/bhavikprit/instinct-ai/issues"
   },
-  "homepage": "https://github.com/bhavikprit/reflex-ai#readme",
+  "homepage": "https://github.com/bhavikprit/instinct-ai#readme",
   "dependencies": {},
   "engines": {
     "node": ">=18.0.0"

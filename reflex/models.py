@@ -115,7 +115,7 @@ def download_model(
     try:
         req = urllib.request.Request(
             url,
-            headers={"User-Agent": "reflex-ai/0.2.0"},
+            headers={"User-Agent": "instinct-ai/0.2.0"},
         )
         with urllib.request.urlopen(req) as resp, open(temp_path, "wb") as out_file:
             chunk_size = 64 * 1024

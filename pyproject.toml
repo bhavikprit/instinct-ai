@@ -22,10 +22,10 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/bhavikprit/reflex-ai"
-Documentation = "https://github.com/bhavikprit/reflex-ai#readme"
-Repository = "https://github.com/bhavikprit/reflex-ai.git"
-Issues = "https://github.com/bhavikprit/reflex-ai/issues"
+Homepage = "https://github.com/bhavikprit/instinct-ai"
+Documentation = "https://github.com/bhavikprit/instinct-ai#readme"
+Repository = "https://github.com/bhavikprit/instinct-ai.git"
+Issues = "https://github.com/bhavikprit/instinct-ai/issues"
 
 [project.optional-dependencies]
 proxy = ["fastapi>=0.100.0", "uvicorn>=0.20.0", "httpx>=0.24.0"]

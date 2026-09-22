@@ -46,7 +46,7 @@ const isUrgent = await ins.noul(
 console.log("Urgent probability:", isUrgent); // e.g. 0.94
 
 // Dynamic rubric selection (Choice)
-const tool = await rx.choice(
+const tool = await ins.choice(
   "Select next autonomous agent action",
   ["search_docs", "restart_service", "page_oncall"],
   "Service timeout on port 5432 after memory leak"
@@ -68,13 +68,13 @@ export default {
     const { prompt } = await request.json();
 
     // Step 1: Sub-0.05ms Instant Guardrail Check
-    const security = rx.guardrail(prompt);
+    const security = ins.guardrail(prompt);
     if (security.blocked) {
       return new Response(JSON.stringify({ error: security.reason }), { status: 400 });
     }
 
     // Step 2: Edge Triage
-    const triage = await rx.evaluate(prompt, {
+    const triage = await ins.evaluate(prompt, {
       is_faq: new Noul({ instructions: "Is this a routine FAQ question?", threshold: 0.85 }),
       route: new Choice({ instructions: "Select route", options: ["resolve_at_edge", "escalate"] })
     });

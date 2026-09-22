@@ -1,12 +1,12 @@
 version: '3.8'
 
 services:
-  reflex-gateway:
+  instinct-gateway:
     build:
       context: .
       dockerfile: Dockerfile
-    image: reflex-ai:latest
-    container_name: reflex-gateway
+    image: instinct-ai:latest
+    container_name: instinct-gateway
     ports:
       - "8000:8000"
     environment:

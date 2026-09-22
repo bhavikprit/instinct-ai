@@ -109,7 +109,7 @@ class ONNXEngine(BaseBackend):
         except ImportError as e:
             raise ImportError(
                 "ONNXEngine requires 'onnxruntime' and 'numpy'. "
-                "Install them via: pip install 'reflex-ai[local]'"
+                "Install them via: pip install 'instinct-ai[local]'"
             ) from e
 
     def _ensure_session(self):

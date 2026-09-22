@@ -111,5 +111,5 @@ def quantize_onnx_model(
     except ImportError as e:
         raise ImportError(
             "quantize_onnx_model requires 'onnxruntime'. "
-            "Install via: pip install 'reflex-ai[local]'"
+            "Install via: pip install 'instinct-ai[local]'"
         ) from e

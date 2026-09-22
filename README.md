@@ -6,7 +6,7 @@
 
 ---
 
-[![CI](https://github.com/bhavikprit/reflex-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/bhavikprit/reflex-ai/actions/workflows/ci.yml)
+[![CI](https://github.com/bhavikprit/instinct-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/bhavikprit/instinct-ai/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/badge/pypi-instinct--ai-blue.svg)](https://pypi.org/project/instinct-ai/)
 [![npm](https://img.shields.io/badge/npm-instinct--ai-red.svg)](https://www.npmjs.com/package/instinct-ai)
@@ -1400,11 +1400,11 @@ instinct index benchmark --nodes 10000 --dim 384 --queries 100 --k 5
 
 ## 🤝 Contributing
 
-Instinct (Reflex-AI) is an open-source project welcoming contributions from AI engineers, system architects, and researchers.
+Instinct AI is an open-source project welcoming contributions from AI engineers, system architects, and researchers.
 
 ```bash
-git clone https://github.com/bhavikprit/reflex-ai.git
-cd reflex-ai
+git clone https://github.com/bhavikprit/instinct-ai.git
+cd instinct-ai
 python3 -m unittest discover -s tests
 ```
 
@@ -1412,9 +1412,9 @@ python3 -m unittest discover -s tests
 
 ## 💖 Support the Project
 
-Reflex-AI is an open-source project maintained to make agent systems faster and cheaper for everyone. 
+Instinct AI is an open-source project maintained to make agent systems faster and cheaper for everyone. 
 
-If Reflex-AI is saving your team tokens or latency in production, consider sponsoring development:
+If Instinct AI is saving your team tokens or latency in production, consider sponsoring development:
 
 - [Support via Buy Me a Coffee](https://buymeacoffee.com/bhavikprit)
 
