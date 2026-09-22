@@ -38,8 +38,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install .
 
-    - name: Run System Diagnostics (reflex doctor)
+    - name: Run System Diagnostics (sys1 & reflex doctor)
       run: |
+        python -m sys1.cli doctor
         python -m reflex.cli doctor
 
     - name: Run Python Unit Tests & Cross-Language Parity

@@ -9,6 +9,7 @@ keywords = ["sys1", "system-1", "o1", "decision-model", "reflex"]
 categories = ["science", "algorithms", "wasm"]
 
 [lib]
+name = "reflex_rs"
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
