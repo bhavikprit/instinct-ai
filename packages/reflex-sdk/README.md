@@ -59,9 +59,9 @@ console.log("Selected tool:", tool); // e.g. "restart_service"
 ### 2. Cloudflare Worker Edge Dual-Brain Gateway
 
 ```javascript
-import { Reflex, Noul, Choice } from "@reflex-ai/sdk";
+import { Sys1, Noul, Choice } from "sys1";
 
-const rx = new Reflex({ cache: true, guardrails: true });
+const rx = new Sys1({ cache: true, guardrails: true });
 
 export default {
   async fetch(request) {

@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish Packages (PyPI & npm)
 
 on:
   release:
@@ -37,3 +37,24 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         skip-existing: true
+
+  publish-npm:
+    name: Publish sys1 to npm
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Run SDK Tests
+      run: node --test packages/reflex-sdk/test/test_reflex.mjs
+
+    - name: Publish to npm
+      run: npm publish --access public
+      working-directory: packages/reflex-sdk
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
