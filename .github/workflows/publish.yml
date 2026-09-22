@@ -41,6 +41,9 @@ jobs:
   publish-npm:
     name: Publish sys1 to npm
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
     - uses: actions/checkout@v4
 
