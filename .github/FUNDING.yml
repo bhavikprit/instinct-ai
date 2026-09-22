@@ -8,5 +8,5 @@ open_collective: reflex-ai
 ko_fi: bhavikprit
 buy_me_a_coffee: bhavikprit
 
-# Custom donation link (Stripe payment link, crypto address, or Open Collective URL)
-custom: ['https://buy.stripe.com/your-payment-link']
+# Custom donation link (Uncomment and replace with your Stripe payment link or crypto address)
+# custom: ['https://buy.stripe.com/your-payment-link']
