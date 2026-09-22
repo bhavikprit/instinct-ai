@@ -1416,15 +1416,16 @@ Reflex-AI is an open-source project maintained to make agent systems faster and 
 
 If Reflex-AI is saving your team tokens or latency in production, consider sponsoring development:
 
-- [Become a GitHub Sponsor](https://github.com/sponsors/bhavikprit)
 - [Support via Open Collective](https://opencollective.com/reflex-ai)
+- [Support via Buy Me a Coffee](https://buymeacoffee.com/bhavikprit)
+- [Support via Ko-fi](https://ko-fi.com/bhavikprit)
 
 ### Enterprise Sponsorship
-If your organization requires priority feature development, custom runtime models, or dedicated integration support, contact (mailto:bhavikpatel13792@gmail.com).
+If your organization requires priority feature development, custom runtime models, or dedicated integration support, contact [bhavikpatel13792@gmail.com](mailto:bhavikpatel13792@gmail.com).
 
-[![GitHub Sponsors](https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?style=flat&logo=githubsponsors)](https://github.com/sponsors/bhavikprit)
-[![Buy Me a Coffee](https://img.shields.io/badge/Donate-Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/bhavikprit)
 [![Open Collective](https://img.shields.io/badge/Support-Open%20Collective-447DE2?style=flat&logo=opencollective)](https://opencollective.com/reflex-ai)
+[![Buy Me a Coffee](https://img.shields.io/badge/Donate-Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/bhavikprit)
+[![Ko-fi](https://img.shields.io/badge/Donate-Ko--fi-F16061?style=flat&logo=kofi&logoColor=white)](https://ko-fi.com/bhavikprit)
 
 ---
 
