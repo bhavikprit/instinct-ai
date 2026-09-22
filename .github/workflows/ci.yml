@@ -23,10 +23,10 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Set up Node.js (for @reflex-ai/sdk)
+    - name: Set up Node.js (for instinct-ai JS SDK)
       uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 22
 
     - name: Compile Native C Engine (libreflex)
       run: |
