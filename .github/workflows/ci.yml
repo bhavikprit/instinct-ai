@@ -38,8 +38,9 @@ jobs:
         python -m pip install --upgrade pip
         pip install .
 
-    - name: Run System Diagnostics (sys1 & reflex doctor)
+    - name: Run System Diagnostics (instinct, sys1 & reflex doctor)
       run: |
+        python -m instinct.cli doctor
         python -m sys1.cli doctor
         python -m reflex.cli doctor
 

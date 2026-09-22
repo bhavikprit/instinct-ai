@@ -8,6 +8,7 @@ pub mod guardrails;
 pub mod primitives;
 
 pub use client::Reflex;
+pub use client::Reflex as Instinct;
 pub use compiler::{crc32, CompiledInstinct, CompiledResult};
 pub use encoder::{cosine_similarity, Md5, SemanticVectorEncoder, VECTOR_DIM};
 pub use guardrails::{GuardrailResult, GuardrailSuite};

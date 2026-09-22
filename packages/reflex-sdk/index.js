@@ -14,7 +14,7 @@ export {
   GuardrailSuite,
 } from "./src/guardrails.js";
 export { CompiledInstinct, crc32 } from "./src/compiler.js";
-export { Reflex, Reflex as Sys1 } from "./src/client.js";
+export { Reflex, Reflex as Instinct, Reflex as Sys1 } from "./src/client.js";
 
 // Default export
 import { Reflex } from "./src/client.js";

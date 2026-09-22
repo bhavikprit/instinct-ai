@@ -39,7 +39,7 @@ jobs:
         skip-existing: true
 
   publish-npm:
-    name: Publish sys1 to npm
+    name: Publish instinct-ai to npm
     runs-on: ubuntu-latest
     permissions:
       contents: read

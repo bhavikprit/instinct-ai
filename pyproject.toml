@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sys1"
+name = "instinct-ai"
 version = "0.2.0"
-description = "Universal System-1 AI Runtime & Dual-Brain Decision Gateway"
+description = "Universal System-1 AI Instinct Runtime & Dual-Brain Decision Gateway"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "Apache-2.0" }
-authors = [{ name = "sys1 Team" }]
-keywords = ["sys1", "system-one", "o1", "decision-model", "ai", "llm", "agents", "reflex", "dual-brain"]
+authors = [{ name = "Instinct AI Team" }]
+keywords = ["instinct", "instinct-ai", "system-1", "sys1", "o1", "decision-model", "ai", "llm", "agents", "reflex", "dual-brain"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -33,14 +33,16 @@ local = ["onnxruntime>=1.15.0", "numpy>=1.20.0"]
 all = ["fastapi>=0.100.0", "uvicorn>=0.20.0", "httpx>=0.24.0", "onnxruntime>=1.15.0", "numpy>=1.20.0"]
 
 [project.scripts]
-sys1 = "sys1.cli:main"
-reflex = "sys1.cli:main"
+instinct = "instinct.cli:main"
+reflex = "instinct.cli:main"
+sys1 = "instinct.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["sys1*", "reflex*"]
+include = ["instinct*", "reflex*", "sys1*"]
 exclude = ["packages*", "reflex_c*", "tests*", "benchmarks*", "examples*"]
 
 [tool.setuptools.package-data]
-"sys1.web" = ["*.html"]
+"instinct.web" = ["*.html"]
 "reflex.web" = ["*.html"]
+"sys1.web" = ["*.html"]

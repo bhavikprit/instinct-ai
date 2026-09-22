@@ -228,5 +228,5 @@ export declare class Reflex {
   ): number;
 }
 
-export { Reflex as Sys1 };
+export { Reflex as Instinct, Reflex as Sys1 };
 export default Reflex;

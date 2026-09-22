@@ -1,16 +1,16 @@
-# sys1
+# instinct-ai
 
-> **Universal System-1 AI Runtime & Dual-Brain Gateway for Edge, Cloudflare Workers, Node.js, and Browsers.**  
-> *OpenAI built o1 for System 2. We built sys1 for System 1.*  
-> *Zero external dependencies. Sub-0.05ms execution. 100% mathematical vector parity with Python sys1.*
+> **Universal System-1 AI Instinct Runtime & Dual-Brain Gateway for Edge, Cloudflare Workers, Node.js, and Browsers.**  
+> *OpenAI built o1 for System 2. We built Instinct for System 1.*  
+> *Zero external dependencies. Sub-0.05ms execution. 100% mathematical vector parity with Python instinct-ai.*
 
 ---
 
-## ⚡ Why sys1 at the Edge?
+## ⚡ Why Instinct at the Edge?
 
 Modern AI agents and web services suffer from high latency, massive cloud LLM bills, and lack of real-time security guardrails. 
 
-`sys1` brings machine-native System-1 decision architecture directly into TypeScript and JavaScript environments:
+`instinct-ai` brings machine-native System-1 decision architecture directly into TypeScript and JavaScript environments:
 - **Cloudflare Workers & Vercel Edge**: Filter prompt injections, PII, and routine queries at the edge in <0.05ms before calling OpenAI/Anthropic.
 - **Node.js & Next.js Backends**: Sub-millisecond tool routing, dynamic schema selection, and semantic memory caching.
 - **Client-Side Browsers**: 100% local, zero-network instinct evaluation with zero API key exposure.
@@ -20,9 +20,9 @@ Modern AI agents and web services suffer from high latency, massive cloud LLM bi
 ## 📦 Installation
 
 ```bash
-npm install sys1
-# or pnpm add sys1
-# or bun add sys1
+npm install instinct-ai
+# or pnpm add instinct-ai
+# or bun add instinct-ai
 ```
 
 *(Has **zero production dependencies** and runs on any standard ECMAScript 2022+ / Web runtime).*
@@ -34,12 +34,12 @@ npm install sys1
 ### 1. Instant System-1 Instincts
 
 ```javascript
-import { Sys1, Noul, Choice } from "sys1";
+import { Instinct, Noul, Choice } from "instinct-ai";
 
-const rx = new Sys1({ cache: true, guardrails: true });
+const ins = new Instinct({ cache: true, guardrails: true });
 
 // Probabilistic Boolean decision (Noul)
-const isUrgent = await rx.noul(
+const isUrgent = await ins.noul(
   "Is this an urgent production database incident?",
   "PostgreSQL primary node replica lag exceeded 60s"
 );
@@ -59,9 +59,9 @@ console.log("Selected tool:", tool); // e.g. "restart_service"
 ### 2. Cloudflare Worker Edge Dual-Brain Gateway
 
 ```javascript
-import { Sys1, Noul, Choice } from "sys1";
+import { Instinct, Noul, Choice } from "instinct-ai";
 
-const rx = new Sys1({ cache: true, guardrails: true });
+const ins = new Instinct({ cache: true, guardrails: true });
 
 export default {
   async fetch(request) {
